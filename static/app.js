@@ -27,8 +27,9 @@ const ENTITIES = {
         "type": "select",
         "options": [
           "",
-          "silver",
-          "gold"
+          "Regular",
+          "gold",
+          "VIP"
         ]
       }
     ],
