@@ -11,52 +11,56 @@ CREATE TABLE customer (
     cust_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     phone VARCHAR(15) NOT NULL,
-    member_tier ENUM('Regular', 'Silver', 'Gold', 'Platinum')
+    member_tier ENUM('Regular', 'silver', 'gold')
         NOT NULL DEFAULT 'Regular'
 );
+
 
 -- 2. เมนูอาหาร
 
 CREATE TABLE menu_item (
     item_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    category ENUM('APPETIZER', 'MAIN_COURSE', 'DESSERT', 'DRINK')
-        NOT NULL,
+    category ENUM(
+        'APPETIZER','MAIN_COURSE','DESSERT','DRINK') NOT NULL,
     price DECIMAL(10,2) NOT NULL,
     is_available BOOLEAN NOT NULL DEFAULT TRUE,
     is_discontinued BOOLEAN NOT NULL DEFAULT FALSE,
 
     CHECK (price >= 0),
-
-    -- เมนูยกเลิกถาวรต้องไม่เปิดขาย
-    CHECK (is_discontinued = FALSE OR is_available = FALSE)
+    CHECK (
+        is_discontinued = FALSE
+        OR is_available = FALSE
+    )
 );
 
 -- 3. โต๊ะอาหาร
 CREATE TABLE dining_table (
     table_id INT AUTO_INCREMENT PRIMARY KEY,
     seats INT NOT NULL,
-    zone ENUM('INDOOR', 'OUTDOOR') NOT NULL,
+    zone ENUM('INDOOR', 'OUTDOOR', 'VIP') NOT NULL,
 
     CHECK (seats > 0)
 );
 
 -- 4. ออเดอร์
-
+-- open = ยังไม่ชำระเงิน
+-- paid = ชำระเงินแล้ว
 CREATE TABLE food_order (
     order_id INT AUTO_INCREMENT PRIMARY KEY,
     cust_id INT NOT NULL,
     table_id INT NOT NULL,
-    order_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    status ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')
-        NOT NULL DEFAULT 'PENDING',
+    order_time DATETIME NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+    status ENUM('open', 'paid')
+        NOT NULL DEFAULT 'open',
 
     FOREIGN KEY (cust_id)
         REFERENCES customer(cust_id),
 
     FOREIGN KEY (table_id)
         REFERENCES dining_table(table_id)
-);
+)
 
 
 -- 5. รายการอาหารในออเดอร์
@@ -107,116 +111,112 @@ CREATE TABLE combo (
 
 
 
+
 -- TODO: INSERT ข้อมูลตัวอย่างทุกตาราง
-INSERT INTO customer (cust_id, name, phone, member_tier)
+-- ลูกค้า 6 คน
+-- ============================================
+-- ส่วนที่ 3 เพิ่มข้อมูลตัวอย่าง
+-- ============================================
+
+-- 1. ลูกค้า 6 คน
+INSERT INTO customer
+(cust_id, name, phone, member_tier)
 VALUES
-(1, 'เจ๋ง',   '0800000001', 'Silver'),
-(2, 'พีท',   '0800000002', 'Regular'),
-(3, 'บีม',   '0800000003', 'Platinum'),	
-(4, 'ปอ',   '0800000004', 'Regular'),
-(5, 'เบส',   '0800000005', 'Gold');
+(1, 'เจ๋ง', '0800000001', 'gold'),
+(2, 'พีท', '0800000002', 'Regular'),
+(3, 'บีม', '0800000003', 'gold'),
+(4, 'ปอ', '0800000004', 'silver'),
+(5, 'เบส', '0800000005', 'gold'),
+(6, 'บอส', '0800000006', 'gold');
 
 
--- 2. เมนูอาหาร 11 รายการ รวมเมนูชุด 2 ชุด
-
+-- 2. เมนูอาหาร 11 รายการ
 INSERT INTO menu_item
-(item_id, name, category, price, is_available, is_discontinued)
+(item_id, name, category, price,
+ is_available, is_discontinued)
 VALUES
-(1, 'ซุปเห็ดทรัฟเฟิล',
- 'APPETIZER', 129.00, TRUE, FALSE),
-
-(2, 'กุ้งทอดซอสครีม',
- 'APPETIZER', 159.00, TRUE, FALSE),
-
-(3, 'แกงหน่อไม้',
- 'MAIN_COURSE', 89.00, TRUE, FALSE),
-
-(4, 'สเต๊กเนื้อซอสไวน์แดง',
- 'MAIN_COURSE', 359.00, TRUE, FALSE),
-
-(5, 'พาสตากุ้งครีมซอส',
- 'MAIN_COURSE', 229.00, TRUE, FALSE),
-
-(6, 'พุดดิ้งวานิลลา',
- 'DESSERT', 79.00, TRUE, FALSE),
-
-(7, 'ช็อกโกแลตลาวา',
- 'DESSERT', 119.00, TRUE, FALSE),
-
-(8, 'ชาพีช',
- 'DRINK', 59.00, TRUE, FALSE),
-
-(9, 'ลิ้นจี่โซดา',
- 'DRINK', 69.00, TRUE, FALSE),
-
-(10, 'ชุดสเต๊กสุดคุ้ม',
- 'MAIN_COURSE', 449.00, TRUE, FALSE),
-
-(11, 'ชุดพาสต้าสุดคุ้ม',
- 'MAIN_COURSE', 279.00, TRUE, FALSE);
+(1, 'ซุปเห็ดทรัฟเฟิล', 'APPETIZER', 129, TRUE, FALSE),
+(2, 'กุ้งทอดซอสครีม', 'APPETIZER', 159, TRUE, FALSE),
+(3, 'แกงหน่อไม้', 'MAIN_COURSE', 89, TRUE, FALSE),
+(4, 'สเต๊กเนื้อซอสไวน์แดง', 'MAIN_COURSE', 359, TRUE, FALSE),
+(5, 'พาสตากุ้งครีมซอส', 'MAIN_COURSE', 229, TRUE, FALSE),
+(6, 'พุดดิ้งวานิลลา', 'DESSERT', 79, TRUE, FALSE),
+(7, 'ช็อกโกแลตลาวา', 'DESSERT', 119, TRUE, FALSE),
+(8, 'ชาพีช', 'DRINK', 59, TRUE, FALSE),
+(9, 'ลิ้นจี่โซดา', 'DRINK', 69, TRUE, FALSE),
+(10, 'ชุดสเต๊กสุดคุ้ม', 'MAIN_COURSE', 449, TRUE, FALSE),
+(11, 'ชุดพาสต้าสุดคุ้ม', 'MAIN_COURSE', 279, TRUE, FALSE);
 
 
--- 3. โต๊ะอาหาร 5 โต๊ะ
-
-INSERT INTO dining_table (table_id, seats, zone)
+-- 3. โต๊ะอาหาร 7 โต๊ะ
+-- โต๊ะ 7 เป็นโซน VIP รองรับ 6 คน
+INSERT INTO dining_table
+(table_id, seats, zone)
 VALUES
 (1, 2, 'INDOOR'),
 (2, 4, 'INDOOR'),
 (3, 4, 'OUTDOOR'),
 (4, 6, 'INDOOR'),
-(5, 8, 'OUTDOOR');
+(5, 8, 'OUTDOOR'),
+(6, 5, 'OUTDOOR'),
+(7, 6, 'VIP');
 
 
--- 4. ออเดอร์ 5 รายการ
--- กำหนดให้ COMPLETED หมายถึงเสร็จและชำระเงินแล้ว
-
+-- 4. ออเดอร์ 6 รายการ
+-- บีมเป็นสมาชิก gold ใช้โต๊ะ VIP หมายเลข 7
 INSERT INTO food_order
 (order_id, cust_id, table_id, order_time, status)
 VALUES
-(1, 1, 4, '2026-09-28 12:00:00', 'COMPLETED'),
-(2, 2, 1, '2026-09-28 18:00:00', 'COMPLETED'),
-(3, 3, 2, '2026-09-29 12:00:00', 'COMPLETED'),
-(4, 4, 5, '2026-09-29 13:00:00', 'COMPLETED'),
-(5, 5, 3, '2026-09-29 14:00:00', 'CANCELLED');
+(1, 1, 4, '2026-09-28 12:00:00', 'paid'),
+(2, 2, 1, '2026-09-28 18:00:00', 'paid'),
+(3, 3, 7, '2026-09-29 12:00:00', 'paid'),
+(4, 4, 5, '2026-09-29 13:00:00', 'paid'),
+(5, 5, 3, '2026-09-29 14:00:00', 'open'),
+(6, 6, 6, '2026-09-29 14:00:00', 'open');
 
 
--- 5. รายการอาหารในออเดอร์ 10 แถว
--- unit_price คือราคาต่อหน่วย ณ เวลาสั่ง
-
+-- 5. รายการอาหารในออเดอร์
+-- unit_price คือราคาตอนสั่งจริง
 INSERT INTO order_item
 (order_id, item_id, qty, unit_price, note)
 VALUES
--- ออเดอร์ 1: สเต๊ก 2 + ชาพีช 2 = 836 บาท
-(1, 4, 2, 359.00, 'เนื้อสุกปานกลาง'),
-(1, 8, 2, 59.00, 'หวานน้อย'),
 
--- ออเดอร์ 2: แกงหน่อไม้ 1 + กุ้งทอด 1 = 248 บาท
-(2, 3, 1, 89.00, 'เผ็ดน้อย'),
-(2, 2, 1, 159.00, 'แยกซอส'),
+-- ออเดอร์ 1 = 836 บาท
+(1, 4, 2, 359, 'เนื้อสุกปานกลาง'),
+(1, 8, 2, 59, 'หวานน้อย'),
 
--- ออเดอร์ 3: ชุดพาสต้า 2 + ช็อกโกแลตลาวา 1 = 677 บาท
-(3, 11, 2, 279.00, NULL),
-(3, 7, 1, 119.00, NULL),
+-- ออเดอร์ 2 = 248 บาท
+(2, 3, 1, 89, 'เผ็ดน้อย'),
+(2, 2, 1, 159, 'แยกซอส'),
 
--- ออเดอร์ 4: ชุดสเต๊ก 3 + ซุปเห็ด 2 = 1,605 บาท
-(4, 10, 3, 449.00, NULL),
-(4, 1, 2, 129.00, NULL),
+-- ออเดอร์ 3 = 677 บาท
+(3, 11, 2, 279, NULL),
+(3, 7, 1, 119, NULL),
 
--- ออเดอร์ 5: พาสต้า 1 + ลิ้นจี่โซดา 1 = 298 บาท
--- ออเดอร์นี้ยกเลิก จึงไม่นับยอดขาย
-(5, 5, 1, 229.00, NULL),
-(5, 9, 1, 69.00, 'ไม่ใส่น้ำแข็ง');
+-- ออเดอร์ 4 = 1605 บาท
+(4, 10, 3, 449, NULL),
+(4, 1, 2, 129, NULL),
+
+-- ออเดอร์ 5 = 298 บาท
+(5, 5, 1, 229, NULL),
+(5, 9, 1, 69, 'ไม่ใส่น้ำแข็ง'),
+
+-- ออเดอร์ 6 = 148 บาท
+(6, 3, 1, 89, NULL),
+(6, 8, 1, 59, NULL);
 
 
--- 6. ส่วนประกอบชุดอาหาร 5 แถว
-
-INSERT INTO combo (item_id, sub_item_id, amount)
+-- 6. ส่วนประกอบชุดอาหาร
+INSERT INTO combo
+(item_id, sub_item_id, amount)
 VALUES
--- ชุดสเต๊ก: สเต๊ก 1 + พุดดิ้ง 1 + ชาพีช 1
+
+-- ชุดสเต๊ก
 (10, 4, 1),
 (10, 6, 1),
 (10, 8, 1),
--- ชุดพาสต้า: พาสต้า 1 + ลิ้นจี่โซดา 1
+
+-- ชุดพาสต้า
 (11, 5, 1),
 (11, 9, 1);
 ิื
