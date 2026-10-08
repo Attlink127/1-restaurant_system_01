@@ -1,28 +1,28 @@
--- ============================================================
---  schema.sql — ระบบร้านอาหาร (นิสิตออกแบบและเขียนเอง)
---  กติกา: 1 ออเดอร์มีหลายเมนู (M:N: order × menu_item ผ่าน order_item),
---         เมนูชุด combo = M:N (menu_item × menu_item)
---  ต้องมี: PK ทุกตาราง, FK ครบ, ชื่อตรงกับ db.py, sample data
--- ============================================================
---
 
--- 1. ลูกค้า
+
+
+USE project69;
+
 CREATE TABLE customer (
     cust_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     phone VARCHAR(15) NOT NULL,
-    member_tier ENUM('Regular', 'silver', 'gold')
+    member_tier ENUM('Regular', 'Gold', 'VIP')
         NOT NULL DEFAULT 'Regular'
 );
 
 
--- 2. เมนูอาหาร
+-- 2. ตารางเมนูอาหาร
 
 CREATE TABLE menu_item (
     item_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     category ENUM(
-        'APPETIZER','MAIN_COURSE','DESSERT','DRINK') NOT NULL,
+        'APPETIZER',
+        'MAIN_COURSE',
+        'DESSERT',
+        'DRINK'
+    ) NOT NULL,
     price DECIMAL(10,2) NOT NULL,
     is_available BOOLEAN NOT NULL DEFAULT TRUE,
     is_discontinued BOOLEAN NOT NULL DEFAULT FALSE,
@@ -34,7 +34,9 @@ CREATE TABLE menu_item (
     )
 );
 
--- 3. โต๊ะอาหาร
+
+
+
 CREATE TABLE dining_table (
     table_id INT AUTO_INCREMENT PRIMARY KEY,
     seats INT NOT NULL,
@@ -43,28 +45,30 @@ CREATE TABLE dining_table (
     CHECK (seats > 0)
 );
 
--- 4. ออเดอร์
--- open = ยังไม่ชำระเงิน
--- paid = ชำระเงินแล้ว
+
+
 CREATE TABLE food_order (
     order_id INT AUTO_INCREMENT PRIMARY KEY,
     cust_id INT NOT NULL,
     table_id INT NOT NULL,
     order_time DATETIME NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
-    status ENUM('open', 'paid')
-        NOT NULL DEFAULT 'open',
+    status ENUM(
+        'PENDING',
+        'IN_PROGRESS',
+        'COMPLETED',
+        'CANCELLED'
+    ) NOT NULL DEFAULT 'PENDING',
 
     FOREIGN KEY (cust_id)
         REFERENCES customer(cust_id),
 
     FOREIGN KEY (table_id)
         REFERENCES dining_table(table_id)
-)
+);
 
 
--- 5. รายการอาหารในออเดอร์
--- เชื่อม food_order กับ menu_item
+
 
 CREATE TABLE order_item (
     order_id INT NOT NULL,
@@ -86,10 +90,7 @@ CREATE TABLE order_item (
 );
 
 
--- 6. ส่วนประกอบของชุดอาหาร
--- item_id     = รหัสเมนูชุด
--- sub_item_id = รหัสเมนูภายในชุด
--- amount      = จำนวนเมนูนั้นต่อหนึ่งชุด
+
 
 CREATE TABLE combo (
     combo_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -111,26 +112,19 @@ CREATE TABLE combo (
 
 
 
-
--- TODO: INSERT ข้อมูลตัวอย่างทุกตาราง
--- ลูกค้า 6 คน
--- ============================================
--- ส่วนที่ 3 เพิ่มข้อมูลตัวอย่าง
--- ============================================
-
--- 1. ลูกค้า 6 คน
 INSERT INTO customer
 (cust_id, name, phone, member_tier)
 VALUES
-(1, 'เจ๋ง', '0800000001', 'gold'),
+(1, 'เจ๋ง', '0800000001', 'Gold'),
 (2, 'พีท', '0800000002', 'Regular'),
-(3, 'บีม', '0800000003', 'gold'),
-(4, 'ปอ', '0800000004', 'silver'),
-(5, 'เบส', '0800000005', 'gold'),
-(6, 'บอส', '0800000006', 'gold');
+(3, 'บีม', '0800000003', 'VIP'),
+(4, 'ปอ', '0800000004', 'Regular'),
+(5, 'เบส', '0800000005', 'Gold'),
+(6, 'บอส', '0800000006', 'Gold');
 
 
--- 2. เมนูอาหาร 11 รายการ
+
+
 INSERT INTO menu_item
 (item_id, name, category, price,
  is_available, is_discontinued)
@@ -148,8 +142,8 @@ VALUES
 (11, 'ชุดพาสต้าสุดคุ้ม', 'MAIN_COURSE', 279, TRUE, FALSE);
 
 
--- 3. โต๊ะอาหาร 7 โต๊ะ
--- โต๊ะ 7 เป็นโซน VIP รองรับ 6 คน
+
+
 INSERT INTO dining_table
 (table_id, seats, zone)
 VALUES
@@ -162,21 +156,21 @@ VALUES
 (7, 6, 'VIP');
 
 
--- 4. ออเดอร์ 6 รายการ
--- บีมเป็นสมาชิก gold ใช้โต๊ะ VIP หมายเลข 7
+
+
 INSERT INTO food_order
 (order_id, cust_id, table_id, order_time, status)
 VALUES
-(1, 1, 4, '2026-09-28 12:00:00', 'paid'),
-(2, 2, 1, '2026-09-28 18:00:00', 'paid'),
-(3, 3, 7, '2026-09-29 12:00:00', 'paid'),
-(4, 4, 5, '2026-09-29 13:00:00', 'paid'),
-(5, 5, 3, '2026-09-29 14:00:00', 'open'),
-(6, 6, 6, '2026-09-29 14:00:00', 'open');
+(1, 1, 4, '2026-09-28 12:00:00', 'COMPLETED'),
+(2, 2, 1, '2026-09-28 18:00:00', 'COMPLETED'),
+(3, 3, 7, '2026-09-29 12:00:00', 'COMPLETED'),
+(4, 4, 5, '2026-09-29 13:00:00', 'COMPLETED'),
+(5, 5, 3, '2026-09-29 14:00:00', 'PENDING'),
+(6, 6, 6, '2026-09-29 14:00:00', 'IN_PROGRESS');
 
 
--- 5. รายการอาหารในออเดอร์
--- unit_price คือราคาตอนสั่งจริง
+
+
 INSERT INTO order_item
 (order_id, item_id, qty, unit_price, note)
 VALUES
@@ -206,7 +200,7 @@ VALUES
 (6, 8, 1, 59, NULL);
 
 
--- 6. ส่วนประกอบชุดอาหาร
+
 INSERT INTO combo
 (item_id, sub_item_id, amount)
 VALUES
@@ -219,6 +213,4 @@ VALUES
 -- ชุดพาสต้า
 (11, 5, 1),
 (11, 9, 1);
-ิื
 
---   ★ ควรมีออเดอร์ status 'open' อย่างน้อย 1 โต๊ะ ไว้ทดสอบ "เปิดออเดอร์ซ้ำโต๊ะเดิมไม่ได้"
