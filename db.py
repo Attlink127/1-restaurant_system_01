@@ -71,7 +71,7 @@ def get_customer(cust_id):
 def create_customer(data):
     """เพิ่ม ลูกค้า ใหม่ — data มีคีย์: name, phone, member_tier"""
     # TODO: INSERT INTO customer (...) VALUES (%s, ...)
-    sql =" INSERT INTO customer (name, phone, member_tier) VALUES (%s,%s,%s)"
+    sql ="INSERT INTO customer (name, phone, member_tier) VALUES (%s,%s,%s)"
     params = (data["name"], data["phone"], data["member_tier"])
     return run_command(sql, params)
    
@@ -233,7 +233,7 @@ def delete_order(order_id):
 #  ★ ชื่อคอลัมน์ใน SELECT จะกลายเป็นหัวตารางบนเว็บ — ใช้ AS 'ชื่อภาษาไทย' ได้
 # ============================================================
 def report_summary():
-    
+
     sql = """SELECT
                 (SELECT COUNT(*) FROM customer) AS 'ลูกค้า',
                 (SELECT COUNT(*) FROM menu_item) AS 'เมนู',
@@ -245,10 +245,12 @@ def report_summary():
                 (SELECT COUNT(*) FROM menu_item WHERE is_available = 1) AS 'เมนูที่พร้อมขาย'
             """
     return run_query(sql)[0]
+
+
 def report_popular_items():
     """📈 เมนูขายดี (Best Sellers)
     คำใบ้: JOIN order_item→menu_item, GROUP BY item, SUM(qty), ORDER BY DESC, LIMIT 5"""
-    # TODO: เขียน SQL รายงานนี้ (เขียน JOIN แบบ explicit INNER JOIN ... ON ...)
+
     sql = """SELECT mi.name AS 'เมนู', sum(oi.qty) AS 'จำนวนขาย'
     FROM order_item oi
     INNER JOIN menu_item mi ON oi.item_id = mi.item_id
@@ -261,7 +263,7 @@ def report_popular_items():
 def report_daily_sales():
     """💰 ยอดขายรวมต่อวัน (Daily Sales)
     คำใบ้: JOIN food_order→order_item→menu_item, GROUP BY วันที่, SUM(qty*price)"""
-    # TODO: เขียน SQL รายงานนี้ (เขียน JOIN แบบ explicit INNER JOIN ... ON ...)
+   
     sql = """SELECT DATE(o.order_time) AS 'วันที่', IFNULL(SUM(oi.qty * mi.price), 0) AS 'ยอดขายรวม'
     FROM food_order o
     INNER JOIN order_item oi ON o.order_id = oi.order_id
@@ -274,14 +276,15 @@ def report_daily_sales():
 def report_big_orders():
     """🧾 ออเดอร์ยอดเกิน 500 บาท (HAVING)
     คำใบ้: GROUP BY order, HAVING SUM(qty*price) > 500"""
-    # TODO: เขียน SQL รายงานนี้ (เขียน JOIN แบบ explicit INNER JOIN ... ON ...)
     sql = """SELECT o.order_id AS 'รหัสออเดอร์', c.name AS 'ชื่อลูกค้า', IFNULL(SUM(oi.qty * mi.price), 0) AS 'ยอดขายรวม'
     FROM food_order o
     INNER JOIN customer c ON o.cust_id = c.cust_id
     INNER JOIN order_item oi ON o.order_id = oi.order_id
     INNER JOIN menu_item mi ON oi.item_id = mi.item_id
     GROUP BY o.order_id,  c.name
+    ORDER BY IFNULL(SUM(oi.qty * mi.price), 0) DESC
     HAVING IFNULL(SUM(oi.qty * mi.price), 0)> 500"""
+
     return run_query(sql)
 
 # ============================================================
