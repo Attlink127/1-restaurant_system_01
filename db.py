@@ -233,24 +233,7 @@ def delete_order(order_id):
 #  ★ ชื่อคอลัมน์ใน SELECT จะกลายเป็นหัวตารางบนเว็บ — ใช้ AS 'ชื่อภาษาไทย' ได้
 # ============================================================
 def report_summary():
-#     """ตัวเลขสรุปบนการ์ด dashboard — คืน dict {ชื่อการ์ด: ตัวเลข}  (1 คีย์ = 1 การ์ด)
-#     ตอนนี้ยังไม่ได้เขียน SQL → คืนค่า None ทุกการ์ด หน้าเว็บจึงแสดง "—" รอไว้
-#     ★ งานของนิสิต: เขียน SQL ตามตัวอย่างด้านล่าง (1 คอลัมน์ใน SELECT = 1 การ์ด
-#       ชื่อหลัง AS = ข้อความใต้ตัวเลข) แล้วลบ return {...} ชุดล่างสุดทิ้ง
-#     ★ การ์ด "คิดเพิ่มเอง" 2 ใบ: ตั้งชื่อการ์ดใหม่ แล้วเขียน SQL เอง
-#     ★ ผลรวมเงินใช้ IFNULL(SUM(...), 0) — ถ้ายังไม่มีข้อมูล SUM จะได้ NULL"""
-
-    # ---- ตัวอย่างเมื่อเขียน SQL แล้ว (เอา # ข้างหน้าออก แล้วเติมให้ครบทุกการ์ด) ----
-    # sql = """SELECT
-    #            (SELECT COUNT(*) FROM ...) AS 'ลูกค้า',
-    #            (SELECT ...)               AS 'เมนู',
-    #            ...
-    #          """
-    # return run_query(sql)[0]      ← [0] = เอาแถวแรก (ผลมีแถวเดียว) ได้เป็น dict
-
-    # TODO: ระหว่างที่ยังไม่ได้เขียน SQL คืนค่า None ให้การ์ดแสดง "—" รอไว้
-  
-
+    
     sql = """SELECT
                 (SELECT COUNT(*) FROM customer) AS 'ลูกค้า',
                 (SELECT COUNT(*) FROM menu_item) AS 'เมนู',
@@ -262,7 +245,6 @@ def report_summary():
                 (SELECT COUNT(*) FROM menu_item WHERE is_available = 1) AS 'เมนูที่พร้อมขาย'
             """
     return run_query(sql)[0]
-
 def report_popular_items():
     """📈 เมนูขายดี (Best Sellers)
     คำใบ้: JOIN order_item→menu_item, GROUP BY item, SUM(qty), ORDER BY DESC, LIMIT 5"""
@@ -284,7 +266,8 @@ def report_daily_sales():
     FROM food_order o
     INNER JOIN order_item oi ON o.order_id = oi.order_id
     INNER JOIN menu_item mi ON oi.item_id = mi.item_id
-    GROUP BY DATE(o.order_time)"""
+    GROUP BY DATE(o.order_time)
+    ORDER BY DATE(o.order_time)"""
     return run_query(sql)
   
 
