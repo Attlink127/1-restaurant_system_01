@@ -129,6 +129,67 @@ def delete_item(item_id):
     return run_command(sql, (item_id,))
 
 
+# ---------- ชุดคอมโบ (combo) ----------
+def search_combos(filters):
+    """ค้นหาส่วนประกอบของชุดคอมโบตามรหัสหรือชื่อเมนู"""
+    sql = """SELECT c.item_id, combo_item.name AS combo_name,
+                    c.sub_item_id, sub_item.name AS sub_item_name, c.amount
+             FROM combo c
+             INNER JOIN menu_item combo_item ON c.item_id = combo_item.item_id
+             INNER JOIN menu_item sub_item ON c.sub_item_id = sub_item.item_id
+             WHERE 1=1"""
+    params = []
+
+    if filters.get("item_id"):
+        sql += " AND c.item_id = %s"
+        params.append(filters["item_id"])
+
+    if filters.get("sub_item_id"):
+        sql += " AND c.sub_item_id = %s"
+        params.append(filters["sub_item_id"])
+
+    if filters.get("combo_name"):
+        sql += " AND combo_item.name LIKE %s"
+        params.append("%" + filters["combo_name"] + "%")
+
+    if filters.get("sub_item_name"):
+        sql += " AND sub_item.name LIKE %s"
+        params.append("%" + filters["sub_item_name"] + "%")
+
+    sql += " ORDER BY c.item_id, c.sub_item_id"
+    return run_query(sql, params)
+
+
+def get_combo(item_id, sub_item_id):
+    """ดึงส่วนประกอบ 1 รายการจากชุดคอมโบ"""
+    sql = ("SELECT item_id, sub_item_id, amount FROM combo "
+           "WHERE item_id = %s AND sub_item_id = %s")
+    rows = run_query(sql, (item_id, sub_item_id))
+    return rows[0] if rows else None
+
+
+def create_combo(data):
+    """เพิ่มเมนูย่อยลงในชุดคอมโบ — data มีคีย์: item_id, sub_item_id, amount"""
+    sql = ("INSERT INTO combo (item_id, sub_item_id, amount) "
+           "VALUES (%s, %s, %s)")
+    params = (data["item_id"], data["sub_item_id"], data["amount"])
+    return run_command(sql, params)
+
+
+def update_combo(item_id, sub_item_id, data):
+    """แก้จำนวนเมนูย่อยในชุดคอมโบ"""
+    sql = ("UPDATE combo SET amount = %s "
+           "WHERE item_id = %s AND sub_item_id = %s")
+    params = (data["amount"], item_id, sub_item_id)
+    return run_command(sql, params)
+
+
+def delete_combo(item_id, sub_item_id):
+    """ลบเมนูย่อยออกจากชุดคอมโบ"""
+    sql = "DELETE FROM combo WHERE item_id = %s AND sub_item_id = %s"
+    return run_command(sql, (item_id, sub_item_id))
+
+
 # ---------- ออเดอร์ (food_order) ----------
 def search_orders(filters):
     # ยอดรวมคำนวณจาก unit_price (ราคาตอนสั่งจริง) ไม่ใช่ราคาเมนูปัจจุบัน

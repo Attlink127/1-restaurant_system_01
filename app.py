@@ -90,6 +90,28 @@ def item_update(_id):
 def item_delete(_id):
     return safe(db.delete_item, _id)
 
+# ---- ชุดคอมโบ ----
+@app.route("/api/combos", methods=["GET"])
+def combos_list():
+    filters = {k: v for k, v in request.args.items() if v}
+    return safe(db.search_combos, filters)
+
+@app.route("/api/combos", methods=["POST"])
+def combo_create():
+    return safe(db.create_combo, request.json)
+
+@app.route("/api/combos/<int:item_id>/<int:sub_item_id>", methods=["GET"])
+def combo_get(item_id, sub_item_id):
+    return safe(db.get_combo, item_id, sub_item_id)
+
+@app.route("/api/combos/<int:item_id>/<int:sub_item_id>", methods=["PUT"])
+def combo_update(item_id, sub_item_id):
+    return safe(db.update_combo, item_id, sub_item_id, request.json)
+
+@app.route("/api/combos/<int:item_id>/<int:sub_item_id>", methods=["DELETE"])
+def combo_delete(item_id, sub_item_id):
+    return safe(db.delete_combo, item_id, sub_item_id)
+
 # ---- ออเดอร์ ----
 @app.route("/api/orders", methods=["GET"])
 def orders_list():

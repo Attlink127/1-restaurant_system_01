@@ -98,6 +98,52 @@ const ENTITIES = {
       }
     ]
   },
+  "combos": {
+    "label": "ชุดคอมโบ",
+    "api": "/api/combos",
+    "idKeys": ["item_id", "sub_item_id"],
+    "search": [
+      {
+        "key": "combo_name",
+        "label": "ชื่อชุด",
+        "type": "text"
+      },
+      {
+        "key": "sub_item_name",
+        "label": "ชื่อเมนูในชุด",
+        "type": "text"
+      }
+    ],
+    "form": [
+      {
+        "key": "item_id",
+        "label": "เมนูชุดหลัก",
+        "type": "select",
+        "editOnly": true,
+        "optionsFrom": {
+          "api": "/api/menu-items",
+          "value": "item_id",
+          "label": "name"
+        }
+      },
+      {
+        "key": "sub_item_id",
+        "label": "เมนูที่อยู่ในชุด",
+        "type": "select",
+        "editOnly": true,
+        "optionsFrom": {
+          "api": "/api/menu-items",
+          "value": "item_id",
+          "label": "name"
+        }
+      },
+      {
+        "key": "amount",
+        "label": "จำนวน",
+        "type": "number"
+      }
+    ]
+  },
   "orders": {
     "label": "ออเดอร์",
     "api": "/api/orders",
@@ -213,11 +259,15 @@ function renderTable(r) {
   const cols = Object.keys(rows[0]);
   head.innerHTML = cols.map(c => "<th>" + c + "</th>").join("") + "<th>จัดการ</th>";
   body.innerHTML = rows.map(row => {
-    const id = row[ENTITIES[current].idKey];
+    const cfg = ENTITIES[current];
+    const id = cfg.idKeys ? cfg.idKeys.map(key => row[key]) : row[cfg.idKey];
     return "<tr>" + cols.map(c => "<td>" + (row[c] ?? "—") + "</td>").join("") +
-      '<td><button class="btn sm" onclick="editRow(' + id + ')">แก้ไข</button> ' +
-      '<button class="btn sm del" onclick="deleteRow(' + id + ')">ลบ</button></td></tr>';
+      '<td><button class="btn sm" onclick=\'editRow(' + JSON.stringify(id) + ')\'>แก้ไข</button> ' +
+      '<button class="btn sm del" onclick=\'deleteRow(' + JSON.stringify(id) + ')\'>ลบ</button></td></tr>';
   }).join("");
+}
+function entityUrl(cfg, id) {
+  return cfg.api + (id === undefined || id === null ? "" : "/" + (Array.isArray(id) ? id.join("/") : id));
 }
 async function openForm(title, data = {}) {
   await loadOptions(formFields(), false);
@@ -228,20 +278,20 @@ async function openForm(title, data = {}) {
 function collectForm() { const d = {}; formFields().filter(f => f.key).forEach(f => d[f.key] = $("#f_" + f.key).value); return d; }
 async function editRow(id) {
   const cfg = ENTITIES[current];
-  const r = await api(cfg.api + "/" + id);
+  const r = await api(entityUrl(cfg, id));
   if (!r.ok) { alert((r.todo ? "🚧 " : "⚠️ ") + r.error); return; }
   editingId = id; openForm("แก้ไขข้อมูล", r.data);
 }
 async function deleteRow(id) {
   if (!confirm("ยืนยันการลบ?")) return;
-  const r = await api(ENTITIES[current].api + "/" + id, { method: "DELETE" });
+  const r = await api(entityUrl(ENTITIES[current], id), { method: "DELETE" });
   if (!r.ok) { alert((r.todo ? "🚧 " : "⚠️ ") + r.error); return; }
   doSearch();
 }
 async function save() {
   const cfg = ENTITIES[current], data = collectForm();
   const opts = { method: editingId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) };
-  const r = await api(editingId ? cfg.api + "/" + editingId : cfg.api, opts);
+  const r = await api(entityUrl(cfg, editingId), opts);
   if (!r.ok) { alert((r.todo ? "🚧 " : "⚠️ ") + r.error); return; }
   $("#modal").classList.add("hidden"); doSearch();
 }
