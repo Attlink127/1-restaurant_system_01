@@ -9,7 +9,8 @@ const ITEM_CATEGORIES = [
   { value: "อาหารเรียกน้ำย่อย", label: "อาหารเรียกน้ำย่อย" },
   { value: "อาหารจานหลัก", label: "อาหารจานหลัก" },
   { value: "ของหวาน", label: "ของหวาน" },
-  { value: "เครื่องดื่ม", label: "เครื่องดื่ม" }
+  { value: "เครื่องดื่ม", label: "เครื่องดื่ม" },
+  { value: "ชุดคอมโบ", label: "ชุดคอมโบ" }
 ];
 const ORDER_STATUSES = [
   { value: "PENDING", label: "PENDING (รอดำเนินการ)" },
@@ -156,6 +157,11 @@ const ENTITIES = {
         "key": "amount",
         "label": "จำนวน",
         "type": "number"
+      },
+      {
+        "key": "price",
+        "label": "ราคาเซ็ต",
+        "type": "number"
       }
     ]
   },
@@ -207,6 +213,65 @@ const ENTITIES = {
         "label": "สถานะ",
         "type": "select",
         "options": ORDER_STATUSES
+      }
+    ]
+  },
+  "reviews": {
+    "label": "รีวิวร้าน",
+    "api": "/api/reviews",
+    "idKey": "review_id",
+    "search": [
+      {
+        "key": "rating",
+        "label": "คะแนน (ดาว)",
+        "type": "select",
+        "options": [
+          { value: "", label: "ทั้งหมด" },
+          { value: "5", label: "⭐⭐⭐⭐⭐ (5 ดาว)" },
+          { value: "4", label: "⭐⭐⭐⭐ (4 ดาว)" },
+          { value: "3", label: "⭐⭐⭐ (3 ดาว)" },
+          { value: "2", label: "⭐⭐ (2 ดาว)" },
+          { value: "1", label: "⭐ (1 ดาว)" }
+        ]
+      },
+      {
+        "key": "comment",
+        "label": "ความคิดเห็น",
+        "type": "text"
+      }
+    ],
+    "form": [
+      {
+        "key": "cust_id",
+        "label": "ลูกค้า",
+        "type": "select",
+        "optionsFrom": {
+          "api": "/api/customers",
+          "value": "cust_id",
+          "label": "name"
+        }
+      },
+      {
+        "key": "order_id",
+        "label": "รหัสออเดอร์",
+        "type": "number"
+      },
+      {
+        "key": "rating",
+        "label": "คะแนน (1-5 ดาว)",
+        "type": "select",
+        "options": [
+          { value: "5", label: "⭐⭐⭐⭐⭐ (5 ดาว)" },
+          { value: "4", label: "⭐⭐⭐⭐ (4 ดาว)" },
+          { value: "3", label: "⭐⭐⭐ (3 ดาว)" },
+          { value: "2", label: "⭐⭐ (2 ดาว)" },
+          { value: "1", label: "⭐ (1 ดาว)" }
+        ]
+      },
+      {
+        "key": "comment",
+        "label": "ความคิดเห็น",
+        "type": "text"
       }
     ]
   }

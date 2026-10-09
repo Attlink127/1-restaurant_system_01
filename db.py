@@ -143,7 +143,8 @@ def delete_item(item_id):
 def search_combos(filters):
     """ค้นหาส่วนประกอบของชุดคอมโบตามรหัสหรือชื่อเมนู"""
     sql = """SELECT c.item_id, combo_item.name AS combo_name,
-                    c.sub_item_id, sub_item.name AS sub_item_name, c.amount
+                    c.sub_item_id, sub_item.name AS sub_item_name,
+                    c.amount, c.price AS combo_price
              FROM combo c
              INNER JOIN menu_item combo_item ON c.item_id = combo_item.item_id
              INNER JOIN menu_item sub_item ON c.sub_item_id = sub_item.item_id
@@ -172,20 +173,21 @@ def search_combos(filters):
 
 def get_combo(item_id, sub_item_id):
     """ดึงส่วนประกอบ 1 รายการจากชุดคอมโบ"""
-    sql = ("SELECT item_id, sub_item_id, amount FROM combo "
+    sql = ("SELECT item_id, sub_item_id, amount, price FROM combo "
            "WHERE item_id = %s AND sub_item_id = %s")
     rows = run_query(sql, (item_id, sub_item_id))
     return rows[0] if rows else None
 
 
 def create_combo(data):
-    """เพิ่มเมนูย่อยลงในชุดคอมโบ — data มีคีย์: item_id, sub_item_id, amount"""
+    """เพิ่มเมนูย่อยลงในชุดคอมโบ — data มีคีย์: item_id, sub_item_id, amount, price"""
     if str(data.get("item_id")) == str(data.get("sub_item_id")):
         raise ValueError("เมนูชุดหลักและเมนูในชุดต้องไม่เป็นเมนูเดียวกัน")
     try:
-        sql = ("INSERT INTO combo (item_id, sub_item_id, amount) "
-               "VALUES (%s, %s, %s)")
-        params = (data["item_id"], data["sub_item_id"], data["amount"])
+        price = data.get("price") or 0.00
+        sql = ("INSERT INTO combo (item_id, sub_item_id, amount, price) "
+               "VALUES (%s, %s, %s, %s)")
+        params = (data["item_id"], data["sub_item_id"], data["amount"], price)
         return run_command(sql, params)
     except mysql.connector.Error as err:
         if err.errno == 1062:
@@ -194,10 +196,11 @@ def create_combo(data):
 
 
 def update_combo(item_id, sub_item_id, data):
-    """แก้จำนวนเมนูย่อยในชุดคอมโบ"""
-    sql = ("UPDATE combo SET amount = %s "
+    """แก้จำนวนเมนูย่อยและราคาในชุดคอมโบ"""
+    price = data.get("price") or 0.00
+    sql = ("UPDATE combo SET amount = %s, price = %s "
            "WHERE item_id = %s AND sub_item_id = %s")
-    params = (data["amount"], item_id, sub_item_id)
+    params = (data["amount"], price, item_id, sub_item_id)
     return run_command(sql, params)
 
 
@@ -288,6 +291,65 @@ def delete_order(order_id):
     return run_command(sql, (order_id,))
 
 
+# ---------- รีวิวร้านอาหาร (review) ----------
+def search_reviews(filters):
+    """ค้นหารีวิวร้านอาหารตาม rating หรือ ข้อความ"""
+    sql = """SELECT r.review_id, r.cust_id, c.name AS customer_name,
+                    r.order_id, r.rating, r.comment, r.review_time
+             FROM review r
+             JOIN customer c ON r.cust_id = c.cust_id
+             WHERE 1=1"""
+    params = []
+
+    if filters.get("rating"):
+        sql += " AND r.rating = %s"
+        params.append(filters["rating"])
+
+    if filters.get("comment"):
+        sql += " AND r.comment LIKE %s"
+        params.append("%" + filters["comment"] + "%")
+
+    sql += " ORDER BY r.review_time DESC"
+    return run_query(sql, params)
+
+
+def get_review(review_id):
+    """ดึงข้อมูลรีวิว 1 รายการ"""
+    sql = "SELECT * FROM review WHERE review_id = %s"
+    rows = run_query(sql, (review_id,))
+    return rows[0] if rows else None
+
+
+def create_review(data):
+    """เพิ่มรีวิวใหม่"""
+    rating = int(data.get("rating", 5))
+    if not (1 <= rating <= 5):
+        raise ValueError("คะแนนรีวิวต้องอยู่ระหว่าง 1 ถึง 5 ดาว")
+    sql = ("INSERT INTO review (cust_id, order_id, rating, comment, review_time) "
+           "VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)")
+    params = (data["cust_id"], blank_to_none(data.get("order_id")),
+              rating, data.get("comment", ""))
+    return run_command(sql, params)
+
+
+def update_review(review_id, data):
+    """แก้ไขรีวิว"""
+    rating = int(data.get("rating", 5))
+    if not (1 <= rating <= 5):
+        raise ValueError("คะแนนรีวิวต้องอยู่ระหว่าง 1 ถึง 5 ดาว")
+    sql = ("UPDATE review SET cust_id=%s, order_id=%s, rating=%s, comment=%s "
+           "WHERE review_id=%s")
+    params = (data["cust_id"], blank_to_none(data.get("order_id")),
+              rating, data.get("comment", ""), review_id)
+    return run_command(sql, params)
+
+
+def delete_review(review_id):
+    """ลบรีวิว"""
+    sql = "DELETE FROM review WHERE review_id=%s"
+    return run_command(sql, (review_id,))
+
+
 # ============================================================
 #  REPORT (รายงาน — ใช้ JOIN + GROUP BY + subquery)
 #  ★ ชื่อคอลัมน์ใน SELECT จะกลายเป็นหัวตารางบนเว็บ — ใช้ AS 'ชื่อภาษาไทย' ได้
@@ -300,7 +362,9 @@ def report_summary():
                 (SELECT IFNULL(SUM(qty * unit_price), 0)
                  FROM order_item) AS 'ยอดขายรวม',
                 (SELECT COUNT(*) FROM dining_table) AS 'โต๊ะทั้งหมด',
-                (SELECT COUNT(*) FROM menu_item WHERE is_available = 1) AS 'เมนูที่พร้อมขาย'
+                (SELECT COUNT(*) FROM menu_item WHERE is_available = 1) AS 'เมนูที่พร้อมขาย',
+                (SELECT COUNT(*) FROM review) AS 'จำนวนรีวิว',
+                (SELECT IFNULL(ROUND(AVG(rating), 1), 0) FROM review) AS 'คะแนนรีวิวเฉลี่ย'
             """
     return run_query(sql)[0]
 
@@ -369,6 +433,19 @@ def report_top_customers():
     return run_query(sql)
 
 
+def report_reviews_summary():
+    """⭐ สรุปคะแนนรีวิวและความคิดเห็นของลูกค้า (Customer Reviews)"""
+    sql = """SELECT r.review_id AS 'รหัสรีวิว',
+                    c.name AS 'ลูกค้า',
+                    CONCAT(REPEAT('⭐', r.rating), ' (', r.rating, '/5)') AS 'คะแนน',
+                    r.comment AS 'ความคิดเห็น',
+                    r.review_time AS 'เวลารีวิว'
+             FROM review r
+             JOIN customer c ON r.cust_id = c.cust_id
+             ORDER BY r.review_time DESC"""
+    return run_query(sql)
+
+
 # ============================================================
 #  รายการรายงานที่แสดงบนหน้า /report  (เรียงตามลำดับที่แสดง)
 #  ★ วิธีเพิ่มรายงานใหม่ (ไม่ต้องแก้ไฟล์อื่น):
@@ -383,4 +460,5 @@ REPORTS = [
     ("big-orders",         "🧾 ออเดอร์ยอดเกิน 500 บาท (HAVING)",           report_big_orders),
     ("sales-by-category",  "📊 ยอดขายแยกตามหมวดหมู่ (Sales by Category)",   report_sales_by_category),
     ("top-customers",      "👑 ลูกค้าที่มียอดใช้จ่ายสูงสุด (Top Spenders)",  report_top_customers),
+    ("reviews",            "⭐ สรุปคะแนนรีวิวและความคิดเห็น (Reviews)",     report_reviews_summary),
 ]

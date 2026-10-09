@@ -21,7 +21,8 @@ CREATE TABLE menu_item (
         'อาหารเรียกน้ำย่อย',
         'อาหารจานหลัก',
         'ของหวาน',
-        'เครื่องดื่ม'
+        'เครื่องดื่ม',
+        'ชุดคอมโบ'
     ) NOT NULL,
     price DECIMAL(10,2) NOT NULL,
     is_available BOOLEAN NOT NULL DEFAULT TRUE,
@@ -97,6 +98,7 @@ CREATE TABLE combo (
     item_id INT NOT NULL,
     sub_item_id INT NOT NULL,
     amount INT NOT NULL,
+    price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
 
     FOREIGN KEY (item_id)
         REFERENCES menu_item(item_id),
@@ -107,7 +109,31 @@ CREATE TABLE combo (
     UNIQUE (item_id, sub_item_id),
 
     CHECK (item_id <> sub_item_id),
-    CHECK (amount > 0)
+    CHECK (amount > 0),
+    CHECK (price >= 0)
+);
+
+
+
+
+-- 7. ตารางรีวิวร้านอาหาร
+
+CREATE TABLE review (
+    review_id INT AUTO_INCREMENT PRIMARY KEY,
+    cust_id INT NOT NULL,
+    order_id INT,
+    rating INT NOT NULL,
+    comment VARCHAR(255),
+    review_time DATETIME NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (cust_id)
+        REFERENCES customer(cust_id),
+
+    FOREIGN KEY (order_id)
+        REFERENCES food_order(order_id),
+
+    CHECK (rating BETWEEN 1 AND 5)
 );
 
 
@@ -138,8 +164,8 @@ VALUES
 (7, 'ช็อกโกแลตลาวา', 'ของหวาน', 119, TRUE, FALSE),
 (8, 'ชาพีช', 'เครื่องดื่ม', 59, TRUE, FALSE),
 (9, 'ลิ้นจี่โซดา', 'เครื่องดื่ม', 69, TRUE, FALSE),
-(10, 'ชุดสเต๊กสุดคุ้ม', 'อาหารจานหลัก', 449, TRUE, FALSE),
-(11, 'ชุดพาสต้าสุดคุ้ม', 'อาหารจานหลัก', 279, TRUE, FALSE);
+(10, 'ชุดสเต๊กสุดคุ้ม', 'ชุดคอมโบ', 449, TRUE, FALSE),
+(11, 'ชุดพาสต้าสุดคุ้ม', 'ชุดคอมโบ', 279, TRUE, FALSE);
 
 
 
@@ -202,15 +228,28 @@ VALUES
 
 
 INSERT INTO combo
-(item_id, sub_item_id, amount)
+(item_id, sub_item_id, amount, price)
 VALUES
 
--- ชุดสเต๊ก
-(10, 4, 1),
-(10, 6, 1),
-(10, 8, 1),
+-- ชุดสเต๊ก (ราคาชุด 449 บาท)
+(10, 4, 1, 449.00),
+(10, 6, 1, 449.00),
+(10, 8, 1, 449.00),
 
--- ชุดพาสต้า
-(11, 5, 1),
-(11, 9, 1);
+-- ชุดพาสต้า (ราคาชุด 279 บาท)
+(11, 5, 1, 279.00),
+(11, 9, 1, 279.00);
+
+
+
+
+INSERT INTO review
+(review_id, cust_id, order_id, rating, comment, review_time)
+VALUES
+(1, 1, 1, 5, 'สเต๊กเนื้อซอสไวน์แดงอร่อยมาก ชาพีชหวานกำลังดี ประทับใจมากครับ', '2026-09-28 13:30:00'),
+(2, 2, 2, 4, 'แกงหน่อไม้และกุ้งทอดรสชาติดี พนักงานบริการสุภาพ', '2026-09-28 19:15:00'),
+(3, 3, 3, 5, 'ชุดพาสต้าสุดคุ้มและช็อกโกแลตลาวาอร่อยมาก บรรยากาศโซน VIP เยี่ยม', '2026-09-29 13:00:00'),
+(4, 4, 4, 5, 'ชุดสเต๊กสุดคุ้มคุ้มค่ามาก ซุปเห็ดทรัฟเฟิลหอมกลมกล่อม', '2026-09-29 14:30:00'),
+(5, 5, 5, 4, 'อาหารอร่อย รอไม่นาน ลิ้นจี่โซดาสดชื่นดี', '2026-09-29 15:00:00'),
+(6, 6, 6, 5, 'บริการรวดเร็ว แกงหน่อไม้รสชาติจัดจ้านกำลังดี แนะนำครับ', '2026-09-29 15:30:00');
 
