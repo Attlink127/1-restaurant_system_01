@@ -1,4 +1,7 @@
 <!DOCTYPE html>
+<!-- report.html — หน้ารายงาน
+     โครงสร้างการ์ดสรุปและตารางรายงานถูกสร้างด้วย JavaScript (report.js) ทั้งหมด
+     จึงไม่ต้องเขียนหัวข้อ/ตารางของแต่ละรายงานใน HTML เอง -->
 <html lang="th">
 <head>
   <meta charset="UTF-8">
@@ -7,6 +10,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+  <!-- แถบด้านบน: ลิงก์สลับไปหน้ารายงาน/หน้าจัดการข้อมูล -->
   <header class="topbar">
     <div class="brand">🍽️ ระบบร้านอาหาร <span>Restaurant Ordering</span></div>
     <nav><a href="/">จัดการข้อมูล</a><a href="/report" class="active">รายงาน</a></nav>
@@ -17,6 +21,7 @@
     <!-- กล่องรายงาน: สร้างจาก db.REPORTS อัตโนมัติ (เพิ่มรายงานที่ db.py ไม่ต้องแก้ไฟล์นี้) -->
     <div id="reports"></div>
   </main>
+  <!-- โหลดสคริปต์หน้ารายงาน ( report.js ) ทำงานทันทีเมื่อโหลดเสร็จ -->
   <script src="{{ url_for('static', filename='report.js') }}"></script>
 </body>
 </html>

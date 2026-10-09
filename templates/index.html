@@ -1,17 +1,22 @@
 <!DOCTYPE html>
+<!-- index.html — หน้าหลักสำหรับจัดการข้อมูล (ลูกค้า/เมนู/คอมโบ/ออเดอร์/รีวิว)
+     โครงสร้างกล่อง/ช่องกรอกจะถูกสร้างด้วย JavaScript (app.js) โดยอ้างอิง id ด้านล่าง -->
 <html lang="th">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ระบบร้านอาหาร — Restaurant Ordering</title>
+  <!-- url_for('static', ...) สร้าง path ไปยังไฟล์ในโฟลเดอร์ static ให้อัตโนมัติ -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+  <!-- แถบด้านบน: โลโก้ + เมนูนำทาง -->
   <header class="topbar">
     <div class="brand">🍽️ ระบบร้านอาหาร <span>Restaurant Ordering</span></div>
     <nav><a href="/" class="active">จัดการข้อมูล</a><a href="/report">รายงาน</a></nav>
   </header>
   <main class="container">
+    <!-- แท็บเลือก entity (data-entity ใช้บอก app.js ว่าจะแสดงข้อมูลตารางไหน) -->
     <div class="tabs">
       <button class="tab active" data-entity="customers">ลูกค้า</button>
       <button class="tab" data-entity="items">เมนูอาหาร</button>
@@ -19,6 +24,7 @@
       <button class="tab" data-entity="orders">ออเดอร์</button>
       <button class="tab" data-entity="reviews">รีวิวร้าน</button>
     </div>
+    <!-- การ์ดค้นหา: ช่องกรอกถูกสร้างโดย buildSearch() ใน app.js -->
     <section class="card">
       <h3>ค้นหา <span id="searchTitle"></span></h3>
       <div id="searchFields" class="search-grid"></div>
@@ -28,11 +34,13 @@
         <button class="btn primary" id="btnSearch">🔍 ค้นหา</button>
       </div>
     </section>
+    <!-- การ์ดแสดงผลตาราง: thead/tbody ถูกวาดโดย renderTable() -->
     <section class="card">
       <div id="status" class="status"></div>
       <div class="table-wrap"><table id="resultTable"><thead><tr id="tableHead"></tr></thead><tbody id="tableBody"></tbody></table></div>
     </section>
   </main>
+  <!-- Modal ฟอร์มเพิ่ม/แก้ไขข้อมูล (ถูกซ่อนไว้ก่อน class hidden) -->
   <div id="modal" class="modal hidden">
     <div class="modal-box">
       <h3 id="modalTitle">เพิ่มข้อมูล</h3>

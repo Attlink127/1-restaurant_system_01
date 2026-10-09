@@ -9,21 +9,31 @@ import config
 ACTIVE_STATUSES = ("PENDING", "IN_PROGRESS")
 
 
+# ---------- ฟังก์ชันพื้นฐานสำหรับติดต่อฐานข้อมูล ----------
 def get_connection():
+    """เปิดการเชื่อมต่อ (Connection) ไปยังฐานข้อมูล MySQL
+    โดยดึงค่าตั้งต้น (host/user/password/database/port) จากไฟล์ config.py"""
     return mysql.connector.connect(
         host=config.DB_HOST, user=config.DB_USER, password=config.DB_PASSWORD,
         database=config.DB_NAME, port=config.DB_PORT)
 
 
 def run_query(sql, params=None):
-    """รัน SELECT คืนผลเป็น list ของ dict"""
+    """รันคำสั่ง SELECT แล้วคืนผลลัพธ์เป็น list ของ dict
+    - dictionary=True ทำให้แต่ละแถวออกมาเป็น dict เช่น {"name": "ข้าวผัด", "price": 50}
+      จึงโยงกับชื่อคอลัมน์ที่ SELECT มาได้ตรง ๆ และกลายเป็นหัวตารางบนหน้าเว็บ
+    - params ถูกส่งแยกจาก sql เพื่อกัน SQL Injection (ไม่เอาไปต่อสตริงเอง)
+    - ปิด cursor และ connection ทุกครั้งเพื่อคืน resource ให้ฐานข้อมูล"""
     conn = get_connection(); cur = conn.cursor(dictionary=True)
     cur.execute(sql, params or ()); rows = cur.fetchall()
     cur.close(); conn.close(); return rows
 
 
 def run_command(sql, params=None):
-    """รัน INSERT / UPDATE / DELETE แล้ว commit"""
+    """รันคำสั่งที่เปลี่ยนแปลงข้อมูล (INSERT / UPDATE / DELETE) แล้ว commit
+    - ต้อง commit() ไม่งั้นข้อมูลจะไม่ถูกบันทึกจริงลงฐานข้อมูล
+    - คืนค่า new_id (id ที่เพิ่ง insert ล่าสุด) และ affected (จำนวนแถวที่ถูกแก้/ลบ)
+      เพื่อให้ฝั่งเว็บรู้ว่าทำงานสำเร็จ"""
     conn = get_connection(); cur = conn.cursor()
     cur.execute(sql, params or ()); conn.commit()
     out = {"new_id": cur.lastrowid, "affected": cur.rowcount}
@@ -58,6 +68,7 @@ def search_customers(filters):
 
 
 def get_customer(cust_id):
+    """ดึงลูกค้า 1 รายตาม cust_id (คืน dict แถวเดียว หรือ None ถ้าไม่พบ)"""
     sql = "SELECT * FROM customer WHERE cust_id = %s"
     rows = run_query(sql, (cust_id,))
     return rows[0] if rows else None
@@ -90,6 +101,7 @@ def delete_customer(cust_id):
 
 # ---------- เมนูอาหาร (menu_item) ----------
 def search_items(filters):
+    """ค้นหาเมนูอาหารตามชื่อเมนู หรือหมวดหมู่"""
     sql = "SELECT * FROM menu_item WHERE 1=1"
     params = []
 
@@ -171,6 +183,7 @@ def search_combos(filters):
     return run_query(sql, params)
 
 
+# ---------- รายงาน: แต่ละฟังก์ชันคืนค่าเป็น list ของ dict (ชื่อคอลัมน์ = หัวตารางบนเว็บ) ----------
 def get_combo(item_id, sub_item_id):
     """ดึงส่วนประกอบ 1 รายการจากชุดคอมโบ"""
     sql = ("SELECT item_id, sub_item_id, amount, price FROM combo "
@@ -181,15 +194,18 @@ def get_combo(item_id, sub_item_id):
 
 def create_combo(data):
     """เพิ่มเมนูย่อยลงในชุดคอมโบ — data มีคีย์: item_id, sub_item_id, amount, price"""
+    # ตรวจสอบทางธุรกิจ: เมนูหลักกับเมนูย่อยต้องไม่ใช่เมนูเดียวกัน
     if str(data.get("item_id")) == str(data.get("sub_item_id")):
         raise ValueError("เมนูชุดหลักและเมนูในชุดต้องไม่เป็นเมนูเดียวกัน")
     try:
+        # ถ้าไม่ได้กรอกราคา ให้ใช้ 0.00 แทน เพื่อกันค่า NULL
         price = data.get("price") or 0.00
         sql = ("INSERT INTO combo (item_id, sub_item_id, amount, price) "
                "VALUES (%s, %s, %s, %s)")
         params = (data["item_id"], data["sub_item_id"], data["amount"], price)
         return run_command(sql, params)
     except mysql.connector.Error as err:
+        # errno 1062 = Duplicate entry (คีย์ซ้ำ) → แปลเป็นข้อความไทยให้ผู้ใช้อ่านรู้เรื่อง
         if err.errno == 1062:
             raise ValueError("มีเมนูย่อยนี้ในชุดคอมโบอยู่แล้ว")
         raise
@@ -263,9 +279,11 @@ def check_table_free(table_id, order_id=None):
 
 
 def create_order(data):
+    """เปิดออเดอร์ใหม่ — ถ้าสถานะยังใช้งานอยู่ (PENDING/IN_PROGRESS) ต้องเช็กว่าโต๊ะว่างก่อน"""
     if data["status"] in ACTIVE_STATUSES:
         check_table_free(data["table_id"])
 
+    # COALESCE(%s, CURRENT_TIMESTAMP): ถ้าผู้ใช้ไม่ระบุเวลาสั่ง ให้ใช้เวลาปัจจุบันของเซิร์ฟเวอร์
     sql = ("INSERT INTO food_order (cust_id, table_id, order_time, status) "
            "VALUES (%s, %s, COALESCE(%s, CURRENT_TIMESTAMP), %s)")
     params = (data["cust_id"], data["table_id"],
@@ -274,9 +292,11 @@ def create_order(data):
 
 
 def update_order(order_id, data):
+    """แก้ไขออเดอร์ — เช็กโต๊ะว่างโดยไม่นับออเดอร์ตัวเอง (order_id) เป็นตัวบล็อก"""
     if data.get("status") in ACTIVE_STATUSES:
         check_table_free(data["table_id"], order_id)
 
+    # COALESCE(%s, order_time): ถ้าไม่ได้แก้เวลา ให้คงค่าเวลาเดิมไว้
     sql = ("UPDATE food_order SET cust_id=%s, table_id=%s, "
            "order_time=COALESCE(%s, order_time), status=%s WHERE order_id=%s")
     params = (data["cust_id"], data["table_id"],
@@ -355,6 +375,8 @@ def delete_review(review_id):
 #  ★ ชื่อคอลัมน์ใน SELECT จะกลายเป็นหัวตารางบนเว็บ — ใช้ AS 'ชื่อภาษาไทย' ได้
 # ============================================================
 def report_summary():
+    """🔢 การ์ดสรุปตัวเลขบน Dashboard — ใช้ subquery นับ/รวมค่าจากแต่ละตารางแล้วคืนเป็นคอลัมน์
+    (MySQL จะใช้ชื่อ alias ภาษาไทยเป็นคีย์ของ dict → 1 คีย์ = 1 การ์ดบนหน้า /report)"""
     sql = """SELECT
                 (SELECT COUNT(*) FROM customer) AS 'ลูกค้า',
                 (SELECT COUNT(*) FROM menu_item) AS 'เมนู',
@@ -371,6 +393,7 @@ def report_summary():
 
 def report_popular_items():
     """📈 เมนูขายดี (Best Sellers)"""
+    # JOIN order_item กับ menu_item เพื่อเอากลุบเมนูย่อยเป็นรายเมนู แล้วเรียงจากขายได้มากสุด → เอา 5 อันดับ
     sql = """SELECT mi.name AS 'เมนู', SUM(oi.qty) AS 'จำนวนขาย'
              FROM order_item oi
              INNER JOIN menu_item mi ON oi.item_id = mi.item_id
@@ -406,7 +429,9 @@ def report_big_orders():
 
 
 def report_sales_by_category():
-    """📊 ยอดขายแยกตามหมวดหมู่ (Sales by Category)"""
+    """📊 ยอดขายแยกตามหมวดหมู่ (Sales by Category)
+    - COUNT(DISTINCT mi.item_id) นับเมนูไม่ซ้ำในหมวดนั้น
+    - GROUP BY mi.category รวมกลุ่มตามหมวดหมู่ (ไม่ให้ซ้ำ) แล้วเรียงตามยอดขาย"""
     sql = """SELECT mi.category AS 'หมวดหมู่',
                     COUNT(DISTINCT mi.item_id) AS 'จำนวนเมนู',
                     SUM(oi.qty) AS 'จำนวนจานที่ขายได้',
@@ -434,7 +459,8 @@ def report_top_customers():
 
 
 def report_reviews_summary():
-    """⭐ สรุปคะแนนรีวิวและความคิดเห็นของลูกค้า (Customer Reviews)"""
+    """⭐ สรุปคะแนนรีวิวและความคิดเห็นของลูกค้า (Customer Reviews)
+    - CONCAT + REPEAT('⭐', rating) วาดรูปดาวตามคะแนน เช่น 3 → ⭐⭐⭐ (3/5)"""
     sql = """SELECT r.review_id AS 'รหัสรีวิว',
                     c.name AS 'ลูกค้า',
                     CONCAT(REPEAT('⭐', r.rating), ' (', r.rating, '/5)') AS 'คะแนน',
