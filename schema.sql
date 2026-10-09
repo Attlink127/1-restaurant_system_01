@@ -18,10 +18,10 @@ CREATE TABLE menu_item (
     item_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     category ENUM(
-        'APPETIZER',
-        'MAIN_COURSE',
-        'DESSERT',
-        'DRINK'
+        'อาหารเรียกน้ำย่อย',
+        'อาหารจานหลัก',
+        'ของหวาน',
+        'เครื่องดื่ม'
     ) NOT NULL,
     price DECIMAL(10,2) NOT NULL,
     is_available BOOLEAN NOT NULL DEFAULT TRUE,
@@ -129,17 +129,17 @@ INSERT INTO menu_item
 (item_id, name, category, price,
  is_available, is_discontinued)
 VALUES
-(1, 'ซุปเห็ดทรัฟเฟิล', 'APPETIZER', 129, TRUE, FALSE),
-(2, 'กุ้งทอดซอสครีม', 'APPETIZER', 159, TRUE, FALSE),
-(3, 'แกงหน่อไม้', 'MAIN_COURSE', 89, TRUE, FALSE),
-(4, 'สเต๊กเนื้อซอสไวน์แดง', 'MAIN_COURSE', 359, TRUE, FALSE),
-(5, 'พาสตากุ้งครีมซอส', 'MAIN_COURSE', 229, TRUE, FALSE),
-(6, 'พุดดิ้งวานิลลา', 'DESSERT', 79, TRUE, FALSE),
-(7, 'ช็อกโกแลตลาวา', 'DESSERT', 119, TRUE, FALSE),
-(8, 'ชาพีช', 'DRINK', 59, TRUE, FALSE),
-(9, 'ลิ้นจี่โซดา', 'DRINK', 69, TRUE, FALSE),
-(10, 'ชุดสเต๊กสุดคุ้ม', 'MAIN_COURSE', 449, TRUE, FALSE),
-(11, 'ชุดพาสต้าสุดคุ้ม', 'MAIN_COURSE', 279, TRUE, FALSE);
+(1, 'ซุปเห็ดทรัฟเฟิล', 'อาหารเรียกน้ำย่อย', 129, TRUE, FALSE),
+(2, 'กุ้งทอดซอสครีม', 'อาหารเรียกน้ำย่อย', 159, TRUE, FALSE),
+(3, 'แกงหน่อไม้', 'อาหารจานหลัก', 89, TRUE, FALSE),
+(4, 'สเต๊กเนื้อซอสไวน์แดง', 'อาหารจานหลัก', 359, TRUE, FALSE),
+(5, 'พาสตากุ้งครีมซอส', 'อาหารจานหลัก', 229, TRUE, FALSE),
+(6, 'พุดดิ้งวานิลลา', 'ของหวาน', 79, TRUE, FALSE),
+(7, 'ช็อกโกแลตลาวา', 'ของหวาน', 119, TRUE, FALSE),
+(8, 'ชาพีช', 'เครื่องดื่ม', 59, TRUE, FALSE),
+(9, 'ลิ้นจี่โซดา', 'เครื่องดื่ม', 69, TRUE, FALSE),
+(10, 'ชุดสเต๊กสุดคุ้ม', 'อาหารจานหลัก', 449, TRUE, FALSE),
+(11, 'ชุดพาสต้าสุดคุ้ม', 'อาหารจานหลัก', 279, TRUE, FALSE);
 
 
 

@@ -11,6 +11,34 @@
 
 > เปิดมาจะเห็นหน้าเว็บ แต่กดค้นหาจะขึ้น 🚧 TODO จนกว่าจะเขียน SQL ครบ
 
+### เปลี่ยนหมวดหมู่เมนูเดิมให้เป็นภาษาไทย
+ถ้าสร้างตาราง `menu_item` ไปแล้ว ให้รัน SQL ต่อไปนี้ใน MySQL **ครั้งเดียว**
+เพื่อแปลงค่าหมวดหมู่เดิม โดยยังเก็บเมนูทั้งหมดไว้:
+
+```sql
+ALTER TABLE menu_item CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+ALTER TABLE menu_item MODIFY category ENUM(
+    'APPETIZER', 'MAIN_COURSE', 'DESSERT', 'DRINK',
+    'อาหารเรียกน้ำย่อย', 'อาหารจานหลัก', 'ของหวาน', 'เครื่องดื่ม'
+) NOT NULL;
+
+UPDATE menu_item
+SET category = CASE category
+    WHEN 'APPETIZER' THEN 'อาหารเรียกน้ำย่อย'
+    WHEN 'MAIN_COURSE' THEN 'อาหารจานหลัก'
+    WHEN 'DESSERT' THEN 'ของหวาน'
+    WHEN 'DRINK' THEN 'เครื่องดื่ม'
+    ELSE category
+END;
+
+ALTER TABLE menu_item MODIFY category ENUM(
+    'อาหารเรียกน้ำย่อย', 'อาหารจานหลัก', 'ของหวาน', 'เครื่องดื่ม'
+) NOT NULL;
+```
+
+ตารางที่สร้างใหม่จาก `schema.sql` จะใช้หมวดหมู่ภาษาไทยตั้งแต่แรกอยู่แล้ว
+
 ## งานที่ต้องทำใน db.py (มองหา # TODO)
 **CRUD:**
   - search_customers, get/create/update/delete_customer

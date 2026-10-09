@@ -5,6 +5,12 @@
 // ★ ตัวอย่าง dropdown ที่อ่านข้อมูลจากฐานข้อมูล: ฟอร์ม "ออเดอร์" ช่อง cust_id
 //   แสดง name แต่ส่งค่าเป็น cust_id (อ่านรายการจาก /api/customers)
 //   ช่อง FK อื่น ๆ ทำแบบเดียวกันได้ — เปลี่ยน "type": "number" เป็น select + optionsFrom
+const ITEM_CATEGORIES = [
+  { value: "อาหารเรียกน้ำย่อย", label: "อาหารเรียกน้ำย่อย" },
+  { value: "อาหารจานหลัก", label: "อาหารจานหลัก" },
+  { value: "ของหวาน", label: "ของหวาน" },
+  { value: "เครื่องดื่ม", label: "เครื่องดื่ม" }
+];
 const ENTITIES = {
   "customers": {
     "label": "ลูกค้า",
@@ -68,7 +74,8 @@ const ENTITIES = {
       {
         "key": "category",
         "label": "หมวดหมู่",
-        "type": "text"
+        "type": "select",
+        "options": [{ value: "", label: "ทั้งหมด" }, ...ITEM_CATEGORIES]
       }
     ],
     "form": [
@@ -80,7 +87,8 @@ const ENTITIES = {
       {
         "key": "category",
         "label": "หมวดหมู่",
-        "type": "text"
+        "type": "select",
+        "options": ITEM_CATEGORIES
       },
       {
         "key": "price",
