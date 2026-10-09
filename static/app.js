@@ -17,11 +17,13 @@ const ITEM_CATEGORIES = [
   { value: "ชุดคอมโบ", label: "ชุดคอมโบ" }
 ];
 // สถานะของออเดอร์ (ค่าตรงกับ ENUM ในฐานข้อมูล) — value คือค่าที่ส่งไป API, label คือข้อความที่ผู้ใช้เห็น
+// แยกค่าที่บันทึกออกจากข้อความที่แสดง: value ต้องเป็นรหัสอังกฤษ เช่น PENDING
+// ส่วน label เป็นภาษาไทย เพื่อให้ผู้ใช้เข้าใจ และไม่ส่งภาษาไทยไปชน ENUM ใน MySQL
 const ORDER_STATUSES = [
-  { value: "PENDING", label: "PENDING (รอดำเนินการ)" },
-  { value: "IN_PROGRESS", label: "IN_PROGRESS (กำลังดำเนินการ)" },
-  { value: "COMPLETED", label: "COMPLETED (เสร็จสิ้น)" },
-  { value: "CANCELLED", label: "CANCELLED (ยกเลิก)" }
+  { value: "PENDING", label: "รอดำเนินการ" },
+  { value: "IN_PROGRESS", label: "กำลังดำเนินการ" },
+  { value: "COMPLETED", label: "เสร็จสิ้น" },
+  { value: "CANCELLED", label: "ยกเลิก" }
 ];
 
 // ENTITIES = ศูนย์กลางการตั้งค่าของทั้งหน้าเว็บ: แต่ละ entity บอก label, api, คีย์หลัก, ช่องค้นหา (search) และช่องฟอร์ม (form)
@@ -124,10 +126,17 @@ const ENTITIES = {
     ]
   },
   // ---------- ชุดคอมโบ (combos) ----------
+  // การสร้างชุดเริ่มจากเพิ่มเมนูชุดหลักใน menu_item หมวดหมู่ "ชุดคอมโบ" พร้อมราคาขายทั้งชุด
+  // จากนั้นตาราง combo จะเก็บว่าเมนูชุดหลัก (item_id) ประกอบด้วยเมนูย่อย (sub_item_id) อะไรบ้าง
+  // เช่น ชุดสเต๊ก 1 ชุดมี 3 แถว: สเต๊ก 1 จาน, พุดดิ้ง 1 ถ้วย และชา 1 แก้ว
+  // amount คือจำนวนเมนูย่อยในชุด ไม่ใช่จำนวนชุดที่ลูกค้าสั่ง
+  // ตอนสั่งจริง เลือกเมนูชุดหลักในฟอร์มออเดอร์ ระบบคิดราคาจาก menu_item.price ของชุดนั้น
+  // ระบบนี้ยังไม่ได้แตกชุดเป็นรายการเมนูย่อยใน order_item หรือตัดสต็อกวัตถุดิบอัตโนมัติ
   "combos": {
     "label": "ชุดคอมโบ",
     "api": "/api/combos",
-    // คีย์หลักมี 2 ตัว (composite key) จึงใช้ idKeys แทน idKey
+    // ฐานข้อมูลใช้ combo_id เป็น PRIMARY KEY และคู่ (item_id, sub_item_id) เป็น UNIQUE
+    // หน้าจอใช้คู่นี้เป็น idKeys เพื่อระบุแถวสำหรับเรียก API แก้ไขและลบ
     "idKeys": ["item_id", "sub_item_id"],
     "search": [
       {
@@ -146,7 +155,7 @@ const ENTITIES = {
         "key": "item_id",
         "label": "เมนูชุดหลัก",
         "type": "select",
-        "editOnly": true,
+        "lockOnEdit": true,
         "optionsFrom": {
           "api": "/api/menu-items",
           "value": "item_id",
@@ -157,7 +166,7 @@ const ENTITIES = {
         "key": "sub_item_id",
         "label": "เมนูที่อยู่ในชุด",
         "type": "select",
-        "editOnly": true,
+        "lockOnEdit": true,
         "optionsFrom": {
           "api": "/api/menu-items",
           "value": "item_id",
@@ -315,6 +324,11 @@ function fieldHtml(f, prefix, value = "") {
         return '<option value="' + v + '"' + (String(v) === String(value ?? "") ? " selected" : "") + '>' + t + '</option>';
       }).join("") + '</select>';
   } else { input = '<input id="' + prefix + f.key + '" type="' + f.type + '" value="' + (value ?? "") + '">'; }
+  if (prefix === "f_" && f.lockOnEdit && editingId !== null) {
+    // คู่ item_id และ sub_item_id เป็นคีย์ของแถวคอมโบ จึงล็อกไว้ตอนแก้ไข
+    // ผู้ใช้แก้จำนวนและราคาได้ แต่ถ้าต้องการเปลี่ยนคู่เมนู ให้ลบแถวเดิมแล้วเพิ่มคู่ใหม่
+    input = input.replace("<select ", "<select disabled ");
+  }
   return '<div class="field"><label>' + f.label + '</label>' + input + '</div>';
 }
 // ช่อง select ที่มี optionsFrom → ดึงตัวเลือกจาก API (เช่น รายชื่อหมวดหมู่จากฐานข้อมูล)
@@ -349,36 +363,189 @@ async function doSearch() {
 }
 // ---------- วาดตารางผลลัพธ์ ----------
 function renderTable(r) {
-  const head = $("#tableHead"), body = $("#tableBody"), st = $("#status");
-  head.innerHTML = ""; body.innerHTML = "";
-  if (!r.ok) { setStatus(st, (r.todo ? "🚧 " : "⚠️ ") + r.error, r.todo ? "todo" : "err"); return; }
-  const rows = r.data || [];
-  if (rows.length === 0) { setStatus(st, "ไม่พบข้อมูล"); return; }
+  const head = $("#tableHead");
+  const body = $("#tableBody");
+  const st = $("#status");
+
+  head.innerHTML = "";
+  body.innerHTML = "";
+
+  if (!r.ok) {
+    setStatus(
+      st,
+      (r.todo ? "🚧 " : "⚠️ ") + r.error,
+      r.todo ? "todo" : "err"
+    );
+    return;
+  }
+
+  const rows = [...(r.data || [])];
+
+  if (rows.length === 0) {
+    setStatus(st, "ไม่พบข้อมูล");
+    return;
+  }
+
+  // เรียงเวลาสั่งจากเก่าไปใหม่
+  if (current === "orders") {
+    rows.sort((a, b) =>
+      new Date(a.order_time) - new Date(b.order_time) ||
+      Number(a.order_id) - Number(b.order_id)
+    );
+  }
+
   setStatus(st, "พบ " + rows.length + " รายการ");
-  const cols = Object.keys(rows[0]);   // ชื่อคอลัมน์ดึงจากกุญแจของแถวแรก (ตรงกับ SQL SELECT)
-  head.innerHTML = cols.map(c => "<th>" + c + "</th>").join("") + "<th>จัดการ</th>";
+
+  const cols = Object.keys(rows[0]);
+
+  head.innerHTML =
+    cols.map(c => "<th>" + c + "</th>").join("") +
+    "<th>จัดการ</th>";
+
   body.innerHTML = rows.map(row => {
     const cfg = ENTITIES[current];
-    // id ของแถว: composite key (idKeys) หรือ id เดียว (idKey) แล้วส่งต่อไปยังปุ่มแก้ไข/ลบ
-    const id = cfg.idKeys ? cfg.idKeys.map(key => row[key]) : row[cfg.idKey];
-    return "<tr>" + cols.map(c => "<td>" + (row[c] ?? "—") + "</td>").join("") +
-      '<td><button class="btn sm" onclick=\'editRow(' + JSON.stringify(id) + ')\'>แก้ไข</button> ' +
-      '<button class="btn sm del" onclick=\'deleteRow(' + JSON.stringify(id) + ')\'>ลบ</button></td></tr>';
+    const id = cfg.idKeys
+      ? cfg.idKeys.map(key => row[key])
+      : row[cfg.idKey];
+
+    const cells = cols.map(c => {
+      let value = row[c] ?? "—";
+
+      // แปลงสถานะในตารางเป็นภาษาไทย
+      if (current === "orders" && c === "status") {
+        value = ORDER_STATUSES.find(
+          s => s.value === row[c]
+        )?.label ?? value;
+      }
+
+      return "<td>" + value + "</td>";
+    }).join("");
+
+    return "<tr>" + cells +
+      '<td><button class="btn sm" onclick=\'editRow(' +
+      JSON.stringify(id) + ')\'>แก้ไข</button> ' +
+      '<button class="btn sm del" onclick=\'deleteRow(' +
+      JSON.stringify(id) + ')\'>ลบ</button></td></tr>';
   }).join("");
 }
 // ประกอบ URL ของทรัพยากร 1 แถว เช่น /api/customers/5 หรือ /api/combos/3/7 (composite key ต่อด้วย /)
 function entityUrl(cfg, id) {
   return cfg.api + (id === undefined || id === null ? "" : "/" + (Array.isArray(id) ? id.join("/") : id));
 }
+// เลือกอาหารหลายรายการ พร้อมจำนวน หมายเหตุ และยอดรวมก่อนบันทึก
+let orderMenus = [];
+// เก็บราคาตอนสั่งของรายการเดิม เพื่อให้การแก้ไขออเดอร์ไม่ใช้ราคาเมนูใหม่แทนประวัติเดิม
+let orderPrices = new Map();
+let orderLineIndex = 0;
+function escapeHtml(value) {
+  // ชื่อเมนูและหมายเหตุอาจมีอักขระพิเศษ จึงแปลงก่อนใส่ HTML เพื่อไม่ให้กลายเป็นแท็กหรือคำสั่ง
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[char]);
+}
+function buildOrderEditor(items) {
+  // items มาจาก API ออเดอร์: ฟอร์มเพิ่มเริ่มด้วยแถวว่าง ส่วนฟอร์มแก้ไขเติมอาหารที่สั่งไว้แล้ว
+  orderPrices = new Map(items.map(item => [String(item.item_id), item.unit_price]));
+  $("#formFields").insertAdjacentHTML("beforeend", `
+    <div class="form-section">สั่งเมนูอาหาร</div>
+    <div id="orderLines"></div>
+    <button type="button" class="btn add sm" id="btnAddMenu">+ เพิ่มเมนู</button>
+    <div class="order-total">ยอดรวม <strong id="orderTotal">0.00</strong> บาท</div>
+    <div id="orderError" role="alert" class="order-error"></div>
+  `);
+  $("#btnAddMenu").onclick = () => addOrderLine();
+  (items.length ? items : [{}]).forEach(item => addOrderLine(item));
+}
+function addOrderLine(item = {}) {
+  const line = document.createElement("div");
+  line.className = "order-line";
+  const index = ++orderLineIndex;
+  const available = orderMenus.filter(menu =>
+    // เมนูใหม่ต้องพร้อมขายและยังไม่เลิกขาย ส่วนเมนูเก่าในออเดอร์ยังแสดงเพื่อแก้ไขประวัติได้
+    (Number(menu.is_available) === 1 && Number(menu.is_discontinued) !== 1) ||
+    orderPrices.has(String(menu.item_id))
+  );
+  const options = available.map(menu => {
+    const selected = String(menu.item_id) === String(item.item_id);
+    const price = orderPrices.get(String(menu.item_id)) ?? menu.price;
+    const suffix = Number(menu.is_available) !== 1 || Number(menu.is_discontinued) === 1
+      ? " (ไม่พร้อมขาย)" : "";
+    return `<option value="${Number(menu.item_id)}" data-price="${escapeHtml(price)}" ${selected ? "selected" : ""}>${escapeHtml(menu.name)}${suffix} — ${Number(price).toFixed(2)} บาท</option>`;
+  }).join("");
+  line.innerHTML = `
+    <div class="field order-menu-field"><label for="orderMenu${index}">เมนูอาหาร</label>
+      <select class="order-menu" id="orderMenu${index}"><option value="">เลือกเมนูอาหาร</option>${options}</select></div>
+    <div class="field"><label for="orderQty${index}">จำนวน</label>
+      <input class="order-qty" id="orderQty${index}" type="number" min="1" step="1" max="2147483647" value="${escapeHtml(item.qty ?? 1)}"></div>
+    <div class="field"><label>รวม (บาท)</label><output class="order-subtotal">0.00</output></div>
+    <button type="button" class="btn del sm order-remove" aria-label="ลบรายการอาหาร">ลบ</button>
+    <div class="field order-note-field"><label for="orderNote${index}">หมายเหตุอาหาร</label>
+      <input class="order-note" id="orderNote${index}" maxlength="255" value="${escapeHtml(item.note)}" placeholder="เช่น ไม่เผ็ด"></div>
+  `;
+  line.querySelector(".order-menu").onchange = updateOrderTotal;
+  line.querySelector(".order-qty").oninput = updateOrderTotal;
+  line.querySelector(".order-remove").onclick = () => {line.remove(); updateOrderTotal();};
+  $("#orderLines").appendChild(line);
+  updateOrderTotal();
+}
+function updateOrderTotal() {
+  // ยอดต่อแถว = ราคาต่อหน่วย × จำนวน และยอดรวม = ผลรวมทุกแถว
+  // ตัวเลขบนหน้าเว็บเป็นยอดให้ผู้ใช้ตรวจสอบ ฝั่งเซิร์ฟเวอร์จะอ่านราคาจากฐานข้อมูลอีกครั้งก่อนบันทึก
+  let total = 0;
+  document.querySelectorAll(".order-line").forEach(line => {
+    const selected = line.querySelector(".order-menu").selectedOptions[0];
+    const price = Number(selected?.dataset.price || 0);
+    const quantity = Number(line.querySelector(".order-qty").value);
+    const amount = Number.isFinite(quantity) && quantity > 0 ? price * quantity : 0;
+    line.querySelector(".order-subtotal").textContent = amount.toFixed(2);
+    total += amount;
+  });
+  $("#orderTotal").textContent = total.toFixed(2);
+}
 // ---------- เปิด Modal ฟอร์ม (ใช้ทั้งเพิ่มและแก้ไข) ----------
 async function openForm(title, data = {}) {
+  const entity = current;
   await loadOptions(formFields(), false);         // โหลดตัวเลือกของช่อง select ที่ดึงจาก API
+  if (entity !== current) return;
+  if (entity === "orders") {
+    const result = await api("/api/menu-items");
+    if (entity !== current) return;
+    if (!result.ok) { alert(result.error || "โหลดเมนูอาหารไม่สำเร็จ"); return; }
+    orderMenus = result.data || [];
+  }
   $("#modalTitle").textContent = title;
   $("#formFields").innerHTML = formFields().map(f => fieldHtml(f, "f_", data[f.key])).join(""); // เติมค่าลงช่อง (prefix f_)
+  $(".modal-box").classList.toggle("order-mode", entity === "orders");
+  if (entity === "orders") buildOrderEditor(data.items || []);
   $("#modal").classList.remove("hidden");         // แสดง Modal
 }
 // รวบรวมค่าจากทุกช่องในฟอร์มเป็น object เพื่อส่งไป API
-function collectForm() { const d = {}; formFields().filter(f => f.key).forEach(f => d[f.key] = $("#f_" + f.key).value); return d; }
+function collectForm() {
+  // ส่งข้อมูลใบออเดอร์พร้อม items เป็น JSON เช่น {item_id: 1, qty: 2, note: "ไม่เผ็ด"}
+  // ไม่ส่ง unit_price ให้ผู้ใช้กำหนดเอง และตรวจจำนวน/เมนูซ้ำก่อนส่งเพื่อลดข้อผิดพลาด
+  const data = {};
+  formFields().filter(f => f.key).forEach(f => data[f.key] = $("#f_" + f.key).value);
+  if (current === "orders") {
+    const lines = [...document.querySelectorAll(".order-line")];
+    if (!data.cust_id || !/^[1-9]\d*$/.test(data.table_id)) {
+      throw new Error("กรุณาเลือกลูกค้าและระบุรหัสโต๊ะเป็นจำนวนเต็มมากกว่า 0");
+    }
+    if (!lines.length) throw new Error("กรุณาเลือกเมนูอาหารอย่างน้อย 1 รายการ");
+    const seen = new Set();
+    data.items = lines.map(line => {
+      const item_id = line.querySelector(".order-menu").value;
+      const qty = line.querySelector(".order-qty").value;
+      if (!item_id) throw new Error("กรุณาเลือกเมนูให้ครบทุกรายการ");
+      if (!/^[1-9]\d*$/.test(qty) || Number(qty) > 2147483647) {
+        throw new Error("จำนวนอาหารต้องเป็นจำนวนเต็มมากกว่า 0");
+      }
+      if (seen.has(item_id)) throw new Error("เมนูซ้ำกัน กรุณารวมจำนวนในรายการเดียว");
+      seen.add(item_id);
+      return {item_id, qty, note: line.querySelector(".order-note").value};
+    });
+  }
+  return data;
+}
 // ---------- ปุ่มแก้ไข: ดึงข้อมูลแถวนั้นมาเติมในฟอร์ม ----------
 async function editRow(id) {
   const cfg = ENTITIES[current];
@@ -395,11 +562,25 @@ async function deleteRow(id) {
 }
 // ---------- ปุ่มบันทึก: ถ้ากำลังแก้ไข → PUT, ถ้าเพิ่มใหม่ → POST ----------
 async function save() {
-  const cfg = ENTITIES[current], data = collectForm();
-  const opts = { method: editingId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) };
-  const r = await api(entityUrl(cfg, editingId), opts);
-  if (!r.ok) { alert((r.todo ? "🚧 " : "⚠️ ") + r.error); return; }
-  $("#modal").classList.add("hidden"); doSearch();   // ปิด Modal แล้วโหลดตารางใหม่
+  // POST ใช้เพิ่มข้อมูลใหม่ ส่วน PUT ใช้แก้ไขข้อมูลเดิมตามรหัสใน URL
+  // ปิดปุ่มระหว่างรอ API เพื่อป้องกันการกดซ้ำขณะที่คำขอเดิมยังไม่เสร็จ
+  const button = $("#btnSave");
+  if (button.disabled) return;
+  button.disabled = true;
+  try {
+    if ($("#orderError")) $("#orderError").textContent = "";
+    const cfg = ENTITIES[current], data = collectForm();
+    const opts = { method: editingId !== null ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) };
+    const r = await api(entityUrl(cfg, editingId), opts);
+    if (!r.ok) throw new Error((r.todo ? "🚧 " : "") + r.error);
+    $("#modal").classList.add("hidden");
+    await doSearch();
+  } catch (error) {
+    if ($("#orderError")) $("#orderError").textContent = error.message;
+    else alert(error.message);
+  } finally {
+    button.disabled = false;
+  }
 }
 // ---------- ผูก Event ให้ปุ่ม/แท็บต่าง ๆ ----------
 // คลิกแท็บ → เปลี่ยน entity แล้วสร้างช่องค้นหาใหม่ + ล้างตารางเดิม

@@ -81,3 +81,19 @@ tr:nth-child(even) td{background:var(--tint)}                               /* �
 .form-section{margin:18px 0 10px;padding-top:12px;border-top:1px dashed var(--line);
   font-size:14px;font-weight:700;color:var(--navy)}                          /* หัวข้อคั่นกลางในฟอร์ม */
 #formFields .field{margin-bottom:10px}                                      /* ระยะห่างช่องกรอกในฟอร์ม */
+/* ขยายเฉพาะฟอร์มออเดอร์ เพื่อให้เลือกเมนู จำนวน และยอดต่อรายการได้ในแถวเดียว */
+.modal-box.order-mode{width:760px}
+.order-line{display:grid;grid-template-columns:minmax(0,1fr) 85px 95px auto;gap:10px;
+  padding:14px 0;border-bottom:1px solid var(--line);margin-bottom:12px}
+.order-line .field{min-width:0}
+.order-note-field{grid-column:1/-1}
+.order-subtotal{display:block;padding:10px 0;font-weight:600}
+.order-remove{align-self:start;margin-top:20px}
+.order-total{text-align:right;font-size:18px;margin:16px 0}
+.order-error{color:#a3261c;margin:10px 0;font-size:14px}
+.btn:disabled{opacity:.6;cursor:wait}
+/* หน้าจอเล็กให้ช่องเลือกเมนูขึ้นแถวใหม่ เพื่อไม่ให้ฟอร์มล้นด้านข้าง */
+@media(max-width:600px){
+  .order-line{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}
+  .order-menu-field{grid-column:1/-1}
+}

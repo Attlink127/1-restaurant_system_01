@@ -4,6 +4,7 @@
 # ============================================================
 import mysql.connector
 import config
+from datetime import datetime
 
 # สถานะออเดอร์ที่ถือว่า "ยังใช้โต๊ะอยู่" (ตรงกับ ENUM ใน schema.sql)
 ACTIVE_STATUSES = ("PENDING", "IN_PROGRESS")
@@ -194,6 +195,10 @@ def get_combo(item_id, sub_item_id):
 
 def create_combo(data):
     """เพิ่มเมนูย่อยลงในชุดคอมโบ — data มีคีย์: item_id, sub_item_id, amount, price"""
+    # ทั้ง item_id (ชุดหลัก) และ sub_item_id (อาหารในชุด) อ้างอิง menu_item.item_id
+    # ตาราง combo เป็นตารางเชื่อม: ชุดหนึ่งมีอาหารหลายอย่าง และอาหารอย่างหนึ่งอยู่ได้หลายชุด
+    # combo_id เป็น PRIMARY KEY ส่วนคู่ (item_id, sub_item_id) มี UNIQUE เพื่อไม่ให้อาหารซ้ำในชุด
+    # ราคาใน combo ไม่ถูกนำมาบวกเป็นยอดออเดอร์ ยอดสั่งชุดใช้ราคา menu_item ของชุดหลัก
     # ตรวจสอบทางธุรกิจ: เมนูหลักกับเมนูย่อยต้องไม่ใช่เมนูเดียวกัน
     if str(data.get("item_id")) == str(data.get("sub_item_id")):
         raise ValueError("เมนูชุดหลักและเมนูในชุดต้องไม่เป็นเมนูเดียวกัน")
@@ -251,8 +256,10 @@ def search_orders(filters):
 
     if filters.get("status"):
         sql += " AND o.status = %s"
-        params.append(filters["status"])
+        params.append(normalize_order_status(filters["status"]))
 
+    sql += " ORDER BY o.order_time ASC, o.order_id ASC"
+    # ASC เรียงออเดอร์จากเวลาเก่าไปใหม่ ถ้าเวลาเท่ากันใช้ order_id เพื่อให้ลำดับแน่นอน
     return run_query(sql, params)
 
 
@@ -260,7 +267,16 @@ def get_order(order_id):
     """ดึงออเดอร์ 1 รายการตาม order_id (ใช้ตอนเปิดฟอร์มแก้ไข)"""
     sql = "SELECT * FROM food_order WHERE order_id = %s"
     rows = run_query(sql, (order_id,))
-    return rows[0] if rows else None
+    if not rows:
+        return None
+    order = rows[0]
+    # food_order เก็บหัวใบสั่ง ส่วน order_item เก็บอาหารในใบสั่งนั้น เชื่อมกันด้วย order_id
+    # JOIN menu_item เพื่อได้ชื่อเมนูสำหรับเติมฟอร์มแก้ไข แต่ยังใช้ราคาตอนสั่งจาก order_item
+    order["items"] = run_query(
+        "SELECT oi.item_id, m.name, oi.qty, oi.unit_price, oi.note "
+        "FROM order_item oi JOIN menu_item m ON m.item_id = oi.item_id "
+        "WHERE oi.order_id = %s ORDER BY oi.item_id", (order_id,))
+    return order
 
 
 def check_table_free(table_id, order_id=None):
@@ -279,29 +295,152 @@ def check_table_free(table_id, order_id=None):
 
 
 def create_order(data):
-    """เปิดออเดอร์ใหม่ — ถ้าสถานะยังใช้งานอยู่ (PENDING/IN_PROGRESS) ต้องเช็กว่าโต๊ะว่างก่อน"""
-    if data["status"] in ACTIVE_STATUSES:
-        check_table_free(data["table_id"])
-
-    # COALESCE(%s, CURRENT_TIMESTAMP): ถ้าผู้ใช้ไม่ระบุเวลาสั่ง ให้ใช้เวลาปัจจุบันของเซิร์ฟเวอร์
-    sql = ("INSERT INTO food_order (cust_id, table_id, order_time, status) "
-           "VALUES (%s, %s, COALESCE(%s, CURRENT_TIMESTAMP), %s)")
-    params = (data["cust_id"], data["table_id"],
-              blank_to_none(data.get("order_time")), data["status"])
-    return run_command(sql, params)
+    return save_order(data)
 
 
 def update_order(order_id, data):
-    """แก้ไขออเดอร์ — เช็กโต๊ะว่างโดยไม่นับออเดอร์ตัวเอง (order_id) เป็นตัวบล็อก"""
-    if data.get("status") in ACTIVE_STATUSES:
-        check_table_free(data["table_id"], order_id)
+    return save_order(data, order_id)
 
-    # COALESCE(%s, order_time): ถ้าไม่ได้แก้เวลา ให้คงค่าเวลาเดิมไว้
-    sql = ("UPDATE food_order SET cust_id=%s, table_id=%s, "
-           "order_time=COALESCE(%s, order_time), status=%s WHERE order_id=%s")
-    params = (data["cust_id"], data["table_id"],
-              blank_to_none(data.get("order_time")), data["status"], order_id)
-    return run_command(sql, params)
+
+def normalize_order_status(value):
+    # รับรหัสอังกฤษตาม ENUM และรองรับข้อความไทยจากหน้าเว็บรุ่นเดิมด้วย
+    # ค่าที่คืนออกไปบันทึกต้องเป็นอังกฤษเสมอ จึงไม่เกิด Data truncated สำหรับสถานะไทย
+    if not isinstance(value, str):
+        raise ValueError("กรุณาเลือกสถานะออเดอร์ที่ถูกต้อง")
+    aliases = {"รอดำเนินการ": "PENDING", "กำลังดำเนินการ": "IN_PROGRESS",
+               "เสร็จสิ้น": "COMPLETED", "ยกเลิก": "CANCELLED"}
+    status = aliases.get(value, value)
+    if status not in ("PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"):
+        raise ValueError("กรุณาเลือกสถานะออเดอร์ที่ถูกต้อง")
+    return status
+
+
+def positive_integer(value, label):
+    # ตรวจที่เซิร์ฟเวอร์ด้วย เพราะผู้ใช้สามารถเรียก API โดยไม่ผ่านการตรวจของหน้าเว็บได้
+    if isinstance(value, bool) or not str(value).isdigit():
+        raise ValueError(f"{label}ต้องเป็นจำนวนเต็มมากกว่า 0")
+    number = int(value)
+    if not 1 <= number <= 2147483647:
+        raise ValueError(f"{label}ต้องเป็นจำนวนเต็มมากกว่า 0 และไม่เกิน 2147483647")
+    return number
+
+
+def save_order(data, order_id=None):
+    """บันทึกใบออเดอร์และรายการอาหารในธุรกรรมเดียว ราคามาจากฐานข้อมูลเท่านั้น"""
+    # ใช้ฟังก์ชันเดียวกันสำหรับเพิ่มและแก้ไข เพื่อตรวจข้อมูลและคิดราคาด้วยหลักเดียวกัน
+    if not isinstance(data, dict):
+        raise ValueError("ข้อมูลออเดอร์ไม่ถูกต้อง")
+    status = normalize_order_status(data.get("status", "PENDING"))
+    cust_id = positive_integer(data.get("cust_id"), "รหัสลูกค้า")
+    table_id = positive_integer(data.get("table_id"), "รหัสโต๊ะ")
+    order_time = blank_to_none(data.get("order_time"))
+    if order_time is not None:
+        try:
+            order_time = datetime.fromisoformat(str(order_time))
+            if order_time.tzinfo is not None:
+                raise ValueError()
+        except (ValueError, TypeError):
+            raise ValueError("กรุณาระบุเวลาสั่งให้ถูกต้อง") from None
+
+    items = data.get("items")
+    parsed = []
+    if "items" in data:
+        if not isinstance(items, list) or not items:
+            raise ValueError("กรุณาเลือกเมนูอาหารอย่างน้อย 1 รายการ")
+        seen = set()
+        for item in items:
+            if not isinstance(item, dict):
+                raise ValueError("รายการอาหารไม่ถูกต้อง")
+            item_id = positive_integer(item.get("item_id"), "รหัสเมนู")
+            qty = positive_integer(item.get("qty"), "จำนวนอาหาร")
+            if item_id in seen:
+                raise ValueError("เมนูซ้ำกัน กรุณารวมจำนวนในรายการเดียว")
+            seen.add(item_id)
+            note = item.get("note") or ""
+            if not isinstance(note, str) or len(note) > 255:
+                raise ValueError("หมายเหตุอาหารต้องไม่เกิน 255 ตัวอักษร")
+            parsed.append((item_id, qty, note))
+
+    conn = get_connection()
+    cur = None
+    try:
+        conn.start_transaction()
+        # ทุกคำสั่งของการบันทึกนี้ใช้ connection เดียวกัน จึง commit หรือ rollback พร้อมกันได้
+        cur = conn.cursor(dictionary=True)
+        existing = {}
+        if order_id is not None:
+            cur.execute("SELECT order_id FROM food_order WHERE order_id = %s FOR UPDATE", (order_id,))
+            if not cur.fetchone():
+                raise ValueError("ไม่พบออเดอร์นี้")
+            cur.execute("SELECT item_id, qty, unit_price FROM order_item WHERE order_id = %s", (order_id,))
+            existing = {row["item_id"]: row for row in cur.fetchall()}
+
+        # ล็อกแถวโต๊ะ เพื่อให้การเปิดออเดอร์พร้อมกันตรวจโต๊ะว่างภายใต้ธุรกรรมเดียว
+        cur.execute("SELECT table_id FROM dining_table WHERE table_id = %s FOR UPDATE", (table_id,))
+        if not cur.fetchone():
+            raise ValueError(f"โต๊ะ {table_id} ไม่มีอยู่จริง")
+        cur.execute("SELECT cust_id FROM customer WHERE cust_id = %s", (cust_id,))
+        if not cur.fetchone():
+            raise ValueError("ไม่พบลูกค้าที่เลือก")
+        if status in ACTIVE_STATUSES:
+            cur.execute(
+                "SELECT order_id FROM food_order WHERE table_id = %s "
+                "AND status IN ('PENDING', 'IN_PROGRESS') AND order_id <> %s",
+                (table_id, order_id or 0))
+            if cur.fetchone():
+                raise ValueError(f"โต๊ะ {table_id} ยังมีออเดอร์ที่ยังไม่เสร็จสิ้น")
+
+        lines = []
+        # อ่านราคาและสถานะพร้อมขายจากฐานข้อมูลจริง ไม่เชื่อราคาที่อาจถูกแก้จากเบราว์เซอร์
+        # เมนูชุดคอมโบก็เป็น menu_item หนึ่งรายการ จึงสั่งได้ด้วยขั้นตอนเดียวกับเมนูทั่วไป
+        for item_id, qty, note in sorted(parsed):
+            cur.execute(
+                "SELECT item_id, name, price, is_available, is_discontinued "
+                "FROM menu_item WHERE item_id = %s FOR UPDATE", (item_id,))
+            menu = cur.fetchone()
+            if not menu:
+                raise ValueError("ไม่พบเมนูที่เลือก")
+            old = existing.get(item_id)
+            available = bool(menu["is_available"]) and not bool(menu["is_discontinued"])
+            if not available and (old is None or qty > old["qty"]):
+                raise ValueError(f"เมนู {menu['name']} ไม่พร้อมขาย")
+            price = old["unit_price"] if old else menu["price"]
+            # รายการเดิมคงราคาตอนสั่ง ส่วนรายการที่เพิ่มใหม่ใช้ราคาปัจจุบัน
+            lines.append((item_id, qty, price, note))
+
+        if order_id is None:
+            cur.execute(
+                "INSERT INTO food_order (cust_id, table_id, order_time, status) "
+                "VALUES (%s, %s, COALESCE(%s, CURRENT_TIMESTAMP), %s)",
+                (cust_id, table_id, order_time, status))
+            order_id = cur.lastrowid
+            new_id = order_id
+        else:
+            cur.execute(
+                "UPDATE food_order SET cust_id=%s, table_id=%s, "
+                "order_time=COALESCE(%s, order_time), status=%s WHERE order_id=%s",
+                (cust_id, table_id, order_time, status, order_id))
+            new_id = None
+        # ลูกค้า API เดิมที่ไม่ได้ส่ง items ยังสามารถแก้สถานะโดยคงรายการอาหารเดิม
+        if items is not None:
+            # ถ้าส่งรายการอาหารมา ให้แทนรายการเดิมด้วยชุดล่าสุดภายใต้ธุรกรรมเดียว
+            # order_item เก็บ qty และ unit_price เพื่อให้รายงานคำนวณ SUM(qty * unit_price) ได้
+            cur.execute("DELETE FROM order_item WHERE order_id = %s", (order_id,))
+            for item_id, qty, price, note in lines:
+                cur.execute(
+                    "INSERT INTO order_item (order_id, item_id, qty, unit_price, note) "
+                    "VALUES (%s, %s, %s, %s, %s)", (order_id, item_id, qty, price, note))
+        conn.commit()
+        # ถึงจุดนี้ใบออเดอร์และอาหารทุกแถวถูกบันทึกสำเร็จแล้ว จึงยืนยันทั้งหมดพร้อมกัน
+        return {"new_id": new_id, "affected": 1, "order_id": order_id}
+    except Exception:
+        # ถ้าบันทึกส่วนใดล้มเหลว ให้ยกเลิกทั้งหมด เพื่อไม่ให้เหลือใบออเดอร์ที่อาหารบันทึกไม่ครบ
+        conn.rollback()
+        raise
+    finally:
+        if cur is not None:
+            cur.close()
+        conn.close()
 
 
 def delete_order(order_id):
