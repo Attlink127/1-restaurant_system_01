@@ -11,6 +11,12 @@ const ITEM_CATEGORIES = [
   { value: "ของหวาน", label: "ของหวาน" },
   { value: "เครื่องดื่ม", label: "เครื่องดื่ม" }
 ];
+const ORDER_STATUSES = [
+  { value: "PENDING", label: "PENDING (รอดำเนินการ)" },
+  { value: "IN_PROGRESS", label: "IN_PROGRESS (กำลังดำเนินการ)" },
+  { value: "COMPLETED", label: "COMPLETED (เสร็จสิ้น)" },
+  { value: "CANCELLED", label: "CANCELLED (ยกเลิก)" }
+];
 const ENTITIES = {
   "customers": {
     "label": "ลูกค้า",
@@ -34,7 +40,7 @@ const ENTITIES = {
         "options": [
           "",
           "Regular",
-          "gold",
+          "Gold",
           "VIP"
         ]
       }
@@ -55,8 +61,9 @@ const ENTITIES = {
         "label": "ระดับ",
         "type": "select",
         "options": [
-          "silver",
-          "gold"
+          "Regular",
+          "Gold",
+          "VIP"
         ]
       }
     ]
@@ -100,8 +107,8 @@ const ENTITIES = {
         "label": "พร้อมขาย",
         "type": "select",
         "options": [
-          "1",
-          "0"
+          { value: "1", label: "พร้อมขาย" },
+          { value: "0", label: "ไม่พร้อมขาย" }
         ]
       }
     ]
@@ -171,11 +178,7 @@ const ENTITIES = {
         "key": "status",
         "label": "สถานะ",
         "type": "select",
-        "options": [
-          "",
-          "open",
-          "paid"
-        ]
+        "options": [{ value: "", label: "ทั้งหมด" }, ...ORDER_STATUSES]
       }
     ],
     "form": [
@@ -203,10 +206,7 @@ const ENTITIES = {
         "key": "status",
         "label": "สถานะ",
         "type": "select",
-        "options": [
-          "open",
-          "paid"
-        ]
+        "options": ORDER_STATUSES
       }
     ]
   }

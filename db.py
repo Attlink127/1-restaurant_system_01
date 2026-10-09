@@ -79,8 +79,13 @@ def update_customer(cust_id, data):
 
 def delete_customer(cust_id):
     """ลบลูกค้าตาม cust_id"""
-    sql = "DELETE FROM customer WHERE cust_id=%s"
-    return run_command(sql, (cust_id,))
+    try:
+        sql = "DELETE FROM customer WHERE cust_id=%s"
+        return run_command(sql, (cust_id,))
+    except mysql.connector.Error as err:
+        if err.errno == 1451:
+            raise ValueError("ไม่สามารถลบลูกค้ารายนี้ได้ เนื่องจากมีประวัติออเดอร์ในระบบ")
+        raise
 
 
 # ---------- เมนูอาหาร (menu_item) ----------
@@ -125,8 +130,13 @@ def update_item(item_id, data):
 
 def delete_item(item_id):
     """ลบเมนูตาม item_id"""
-    sql = "DELETE FROM menu_item WHERE item_id=%s"
-    return run_command(sql, (item_id,))
+    try:
+        sql = "DELETE FROM menu_item WHERE item_id=%s"
+        return run_command(sql, (item_id,))
+    except mysql.connector.Error as err:
+        if err.errno == 1451:
+            raise ValueError("ไม่สามารถลบเมนูนี้ได้ เนื่องจากมีประวัติการสั่งซื้อหรืออยู่ในชุดคอมโบ (แนะนำให้แก้ไขโดยปิด 'พร้อมขาย' แทน)")
+        raise
 
 
 # ---------- ชุดคอมโบ (combo) ----------
@@ -170,10 +180,17 @@ def get_combo(item_id, sub_item_id):
 
 def create_combo(data):
     """เพิ่มเมนูย่อยลงในชุดคอมโบ — data มีคีย์: item_id, sub_item_id, amount"""
-    sql = ("INSERT INTO combo (item_id, sub_item_id, amount) "
-           "VALUES (%s, %s, %s)")
-    params = (data["item_id"], data["sub_item_id"], data["amount"])
-    return run_command(sql, params)
+    if str(data.get("item_id")) == str(data.get("sub_item_id")):
+        raise ValueError("เมนูชุดหลักและเมนูในชุดต้องไม่เป็นเมนูเดียวกัน")
+    try:
+        sql = ("INSERT INTO combo (item_id, sub_item_id, amount) "
+               "VALUES (%s, %s, %s)")
+        params = (data["item_id"], data["sub_item_id"], data["amount"])
+        return run_command(sql, params)
+    except mysql.connector.Error as err:
+        if err.errno == 1062:
+            raise ValueError("มีเมนูย่อยนี้ในชุดคอมโบอยู่แล้ว")
+        raise
 
 
 def update_combo(item_id, sub_item_id, data):
@@ -265,6 +282,8 @@ def update_order(order_id, data):
 
 
 def delete_order(order_id):
+    """ลบออเดอร์และรายการอาหารในออเดอร์"""
+    run_command("DELETE FROM order_item WHERE order_id=%s", (order_id,))
     sql = "DELETE FROM food_order WHERE order_id=%s"
     return run_command(sql, (order_id,))
 
@@ -322,6 +341,34 @@ def report_big_orders():
     return run_query(sql)
 
 
+def report_sales_by_category():
+    """📊 ยอดขายแยกตามหมวดหมู่ (Sales by Category)"""
+    sql = """SELECT mi.category AS 'หมวดหมู่',
+                    COUNT(DISTINCT mi.item_id) AS 'จำนวนเมนู',
+                    SUM(oi.qty) AS 'จำนวนจานที่ขายได้',
+                    IFNULL(SUM(oi.qty * oi.unit_price), 0) AS 'ยอดขายรวม'
+             FROM menu_item mi
+             INNER JOIN order_item oi ON mi.item_id = oi.item_id
+             GROUP BY mi.category
+             ORDER BY SUM(oi.qty * oi.unit_price) DESC"""
+    return run_query(sql)
+
+
+def report_top_customers():
+    """👑 ลูกค้าที่มียอดใช้จ่ายสูงสุด (Top Spenders)"""
+    sql = """SELECT c.cust_id AS 'รหัสลูกค้า',
+                    c.name AS 'ชื่อลูกค้า',
+                    c.member_tier AS 'ระดับสมาชิก',
+                    COUNT(DISTINCT o.order_id) AS 'จำนวนออเดอร์',
+                    IFNULL(SUM(oi.qty * oi.unit_price), 0) AS 'ยอดใช้จ่ายรวม'
+             FROM customer c
+             INNER JOIN food_order o ON c.cust_id = o.cust_id
+             INNER JOIN order_item oi ON o.order_id = oi.order_id
+             GROUP BY c.cust_id, c.name, c.member_tier
+             ORDER BY SUM(oi.qty * oi.unit_price) DESC"""
+    return run_query(sql)
+
+
 # ============================================================
 #  รายการรายงานที่แสดงบนหน้า /report  (เรียงตามลำดับที่แสดง)
 #  ★ วิธีเพิ่มรายงานใหม่ (ไม่ต้องแก้ไฟล์อื่น):
@@ -331,7 +378,9 @@ def report_big_orders():
 #  ★ ห้ามตั้งชื่อ url ว่า "summary" (ใช้แล้วสำหรับการ์ดสรุป)
 # ============================================================
 REPORTS = [
-    ("popular-items", "📈 เมนูขายดี (Best Sellers)",        report_popular_items),
-    ("daily-sales",   "💰 ยอดขายรวมต่อวัน (Daily Sales)",   report_daily_sales),
-    ("big-orders",    "🧾 ออเดอร์ยอดเกิน 500 บาท (HAVING)", report_big_orders),
+    ("popular-items",      "📈 เมนูขายดี (Best Sellers)",                  report_popular_items),
+    ("daily-sales",        "💰 ยอดขายรวมต่อวัน (Daily Sales)",             report_daily_sales),
+    ("big-orders",         "🧾 ออเดอร์ยอดเกิน 500 บาท (HAVING)",           report_big_orders),
+    ("sales-by-category",  "📊 ยอดขายแยกตามหมวดหมู่ (Sales by Category)",   report_sales_by_category),
+    ("top-customers",      "👑 ลูกค้าที่มียอดใช้จ่ายสูงสุด (Top Spenders)",  report_top_customers),
 ]
