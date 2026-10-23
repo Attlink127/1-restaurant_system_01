@@ -279,6 +279,8 @@ def delete_combo(item_id, sub_item_id):
 
 # ---------- ออเดอร์ (food_order) ----------
 def search_orders(filters):
+    # ซ่อนแถวเมื่อใบเสร็จของการชำระปัจจุบันถูกลบ; ไม่ลบออเดอร์จริงหรือเปลี่ยนยอดรายงาน
+    # ออเดอร์ที่ยังไม่จ่าย และออเดอร์ที่รับชำระใหม่แล้ว ยังแสดงตามปกติ
     # ยอดรวมคำนวณจาก unit_price (ราคาตอนสั่งจริง) ไม่ใช่ราคาเมนูปัจจุบัน
     sql = """SELECT o.order_id, o.cust_id, c.name AS customer_name,
                     o.table_id, t.zone, t.seats, o.order_time, o.status,
@@ -293,7 +295,7 @@ def search_orders(filters):
                         FROM order_item oi
                         GROUP BY oi.order_id) AS order_totals
                     ON o.order_id = order_totals.order_id
-             WHERE 1=1"""
+             WHERE p.receipt_deleted_at IS NULL"""
     params = []
 
     if filters.get("cust_id"):
