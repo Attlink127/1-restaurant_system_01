@@ -9,6 +9,9 @@
 //   ช่อง FK อื่น ๆ ทำแบบเดียวกันได้ — เปลี่ยน "type": "number" เป็น select + optionsFrom
 
 // รายการหมวดหมู่เมนู ใช้เป็นตัวเลือก (options) ของช่อง category
+const DINING_ZONES = [
+  {value:"INDOOR",label:"ในร้าน"}, {value:"OUTDOOR",label:"นอกร้าน"}, {value:"VIP",label:"VIP"}
+];
 const ITEM_CATEGORIES = [
   { value: "อาหารเรียกน้ำย่อย", label: "อาหารเรียกน้ำย่อย" },
   { value: "อาหารจานหลัก", label: "อาหารจานหลัก" },
@@ -22,12 +25,28 @@ const ITEM_CATEGORIES = [
 const ORDER_STATUSES = [
   { value: "PENDING", label: "รอดำเนินการ" },
   { value: "IN_PROGRESS", label: "กำลังดำเนินการ" },
+  { value: "READY", label: "พร้อมเสิร์ฟ" },
   { value: "COMPLETED", label: "เสร็จสิ้น" },
   { value: "CANCELLED", label: "ยกเลิก" }
 ];
 
 // ENTITIES = ศูนย์กลางการตั้งค่าของทั้งหน้าเว็บ: แต่ละ entity บอก label, api, คีย์หลัก, ช่องค้นหา (search) และช่องฟอร์ม (form)
 const ENTITIES = {
+  // ประวัติรับเงินอ่านอย่างเดียว เพิ่มบิลจากรายละเอียดออเดอร์ เพื่อป้องกันการสร้างบิลลอย
+  "payments": {
+    label: "การชำระเงิน / ใบเสร็จ", api: "/api/payments", idKey: "payment_id", readOnly: true,
+    search: [
+      {key: "payment_state", label: "สถานะบิล", type: "select", options: [
+        {value:"", label:"ทั้งหมด"}, {value:"PAID", label:"ชำระแล้ว"}, {value:"CANCELLED", label:"ยกเลิกแล้ว"}
+      ]},
+      {key: "order_id", label: "เลขออเดอร์", type: "number"},
+      {key: "customer_name", label: "ชื่อลูกค้าในใบเสร็จ", type: "text"},
+      {key: "payment_date", label: "วันที่ชำระ", type: "date"},
+      {key: "method", label: "วิธีชำระ", type: "select", options: [
+        {value: "", label: "ทั้งหมด"}, {value: "CASH", label: "เงินสด"}, {value: "TRANSFER", label: "โอนเงิน"}
+      ]}
+    ], form: []
+  },
   // ---------- ลูกค้า (customers) ----------
   "customers": {
     "label": "ลูกค้า",
@@ -69,13 +88,13 @@ const ENTITIES = {
       },
       {
         "key": "member_tier",
-        "label": "ระดับ",
+        "label": "ระดับสมาชิก",
         "type": "select",
-        "options": [
-          "Regular",
-          "Gold",
-          "VIP"
-        ]
+        "options": ["Regular", "Gold", "VIP"]
+      },
+      {
+        "type": "heading",
+        "label": "เลือกระดับสมาชิกได้เอง ระบบยังเลื่อนตามยอดออเดอร์เสร็จสิ้น: Gold ครบ 3,000 บาท / VIP ครบ 10,000 บาท เมื่อบันทึกออเดอร์ครั้งถัดไป"
       }
     ]
   },
@@ -120,7 +139,16 @@ const ENTITIES = {
         "type": "select",
         "options": [
           { value: "1", label: "พร้อมขาย" },
-          { value: "0", label: "ไม่พร้อมขาย" }
+          { value: "0", label: "หมดชั่วคราว" }
+        ]
+      },
+      {
+        "key": "is_discontinued",
+        "label": "เลิกขาย (เมื่อเลือกเลิกขาย ระบบจะปิดพร้อมขายให้)",
+        "type": "select",
+        "options": [
+          { value: "0", label: "ยังจำหน่าย" },
+          { value: "1", label: "เลิกขาย" }
         ]
       }
     ]
@@ -135,8 +163,7 @@ const ENTITIES = {
   "combos": {
     "label": "ชุดคอมโบ",
     "api": "/api/combos",
-    // ฐานข้อมูลใช้ combo_id เป็น PRIMARY KEY และคู่ (item_id, sub_item_id) เป็น UNIQUE
-    // หน้าจอใช้คู่นี้เป็น idKeys เพื่อระบุแถวสำหรับเรียก API แก้ไขและลบ
+    // API อ้างแถวด้วยคู่ UNIQUE นี้; ส่วน PK จริงใน schema คือ combo_id
     "idKeys": ["item_id", "sub_item_id"],
     "search": [
       {
@@ -191,6 +218,7 @@ const ENTITIES = {
     "api": "/api/orders",
     "idKey": "order_id",
     "search": [
+      {key:"zone",label:"โซนที่นั่ง",type:"select",options:[{value:"",label:"ทั้งหมด"}, ...DINING_ZONES]},
       {
         "key": "cust_id",
         "label": "รหัสลูกค้า",
@@ -219,11 +247,8 @@ const ENTITIES = {
           "label": "name"
         }
       },
-      {
-        "key": "table_id",
-        "label": "รหัสโต๊ะ",
-        "type": "number"
-      },
+      {key:"zone",label:"โซนที่นั่ง",type:"select",options:[{value:"",label:"เลือกโซนที่นั่ง"}, ...DINING_ZONES]},
+      {key:"table_id",label:"โต๊ะ / จำนวนที่นั่ง",type:"select",options:[{value:"",label:"เลือกโซนก่อน"}]},
       {
         "key": "order_time",
         "label": "เวลาสั่ง",
@@ -275,8 +300,9 @@ const ENTITIES = {
       },
       {
         "key": "order_id",
-        "label": "รหัสออเดอร์",
-        "type": "number"
+        "label": "ออเดอร์ที่เสร็จสิ้นของลูกค้า",
+        "type": "select",
+        "options": [{value: "", label: "เลือกออเดอร์"}]
       },
       {
         "key": "rating",
@@ -300,7 +326,7 @@ const ENTITIES = {
 };
 
 // ---------- สถานะปัจจุบันและฟังก์ชันช่วยเหลือพื้นฐาน ----------
-let current = Object.keys(ENTITIES)[0];   // แท็บที่กำลังเปิดอยู่ (เริ่มที่ตัวแรก = customers)
+let current = document.querySelector(".tab.active")?.dataset.entity || "customers";   // แท็บที่กำลังเปิดอยู่ (เริ่มที่ตัวแรก = customers)
 let editingId = null;                      // id ของแถวที่กำลังแก้ไข (null = กำลังเพิ่มใหม่)
 // $ = ทางลัดสำหรับ document.querySelector เพื่อให้เขียนสั้นลง
 const $ = (s) => document.querySelector(s);
@@ -314,16 +340,19 @@ async function api(url, opts) { const res = await fetch(url, opts); return res.j
 function fieldHtml(f, prefix, value = "") {
   if (f.type === "heading") return '<div class="form-section">' + f.label + '</div>'; // หัวข้อคั่นกลางฟอร์ม
   let input;
-  if (f.type === "select") {
+  if (f.key === "phone") {
+    input = '<input id="' + prefix + f.key + '" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel"' +
+      (prefix === "f_" ? ' minlength="10" pattern="[0-9]{10}" required' : '') + ' value="' + escapeHtml(value ?? "") + '">';
+  } else if (f.type === "select") {
     // options เป็นข้อความ "a" หรือ {value, label} ก็ได้
     input = '<select id="' + prefix + f.key + '">' +
       f.options.map(o => {
         const v = typeof o === "object" ? o.value : o;                          // ค่าที่จะส่งไป
         const t = typeof o === "object" ? o.label : (o || "ทั้งหมด");           // ข้อความที่แสดง
         // เทียบค่าปัจจุบัน (value) กับ option นี้ ถ้าตรงกันให้เลือก option นี้ (selected)
-        return '<option value="' + v + '"' + (String(v) === String(value ?? "") ? " selected" : "") + '>' + t + '</option>';
+        return '<option value="' + escapeHtml(v) + '"' + (String(v) === String(value ?? "") ? " selected" : "") + '>' + escapeHtml(t) + '</option>';
       }).join("") + '</select>';
-  } else { input = '<input id="' + prefix + f.key + '" type="' + f.type + '" value="' + (value ?? "") + '">'; }
+  } else { input = '<input id="' + prefix + f.key + '" type="' + f.type + '" value="' + escapeHtml(value ?? "") + '">'; }
   if (prefix === "f_" && f.lockOnEdit && editingId !== null) {
     // คู่ item_id และ sub_item_id เป็นคีย์ของแถวคอมโบ จึงล็อกไว้ตอนแก้ไข
     // ผู้ใช้แก้จำนวนและราคาได้ แต่ถ้าต้องการเปลี่ยนคู่เมนู ให้ลบแถวเดิมแล้วเพิ่มคู่ใหม่
@@ -350,7 +379,9 @@ async function buildSearch() {
   await loadOptions(cfg.search, true);          // โหลดตัวเลือกจาก API ก่อน
   if (cfg !== ENTITIES[current]) return;         // ผู้ใช้เปลี่ยนแท็บระหว่างรอ → ยกเลิก
   $("#searchTitle").textContent = cfg.label;
-  $("#searchFields").innerHTML = cfg.search.map(f => fieldHtml(f, "s_")).join("");  // สร้าง input ทุกช่อง (prefix s_)
+  $("#btnAdd").hidden = !!cfg.readOnly;
+  $("#searchFields").innerHTML = cfg.search.map(f => fieldHtml(f, "s_")).join("");
+  bindPhoneInput("s_");  // สร้าง input ทุกช่อง (prefix s_)
 }
 // ---------- ค้นหา: อ่านค่าจากช่องกรอก แล้วเรียก API ----------
 async function doSearch() {
@@ -359,10 +390,12 @@ async function doSearch() {
   // ใส่เฉพาะช่องที่กรอกจริงลงเป็น query string เช่น ?name=สม&member_tier=Gold
   cfg.search.forEach(f => { const v = $("#s_" + f.key).value; if (v) params.append(f.key, v); });
   setStatus($("#status"), "กำลังค้นหา...");
-  renderTable(await api(cfg.api + "?" + params.toString()));
+  const result = await api(cfg.api + "?" + params.toString());
+  if (cfg === ENTITIES[current]) renderTable(result);
 }
 // ---------- วาดตารางผลลัพธ์ ----------
 function renderTable(r) {
+  $("#resultTable").dataset.entity = current;
   const head = $("#tableHead");
   const body = $("#tableBody");
   const st = $("#status");
@@ -396,10 +429,10 @@ function renderTable(r) {
 
   setStatus(st, "พบ " + rows.length + " รายการ");
 
-  const cols = Object.keys(rows[0]);
+  const cols = Object.keys(rows[0]).filter(key => key !== 'receipt_id' && (current !== 'payments' || !['cancel_reason','cancelled_at'].includes(key)));
 
   head.innerHTML =
-    cols.map(c => "<th>" + c + "</th>").join("") +
+    cols.map(c => "<th>" + escapeHtml(COLUMN_LABELS[c] || c) + "</th>").join("") +
     "<th>จัดการ</th>";
 
   body.innerHTML = rows.map(row => {
@@ -418,14 +451,28 @@ function renderTable(r) {
         )?.label ?? value;
       }
 
-      return "<td>" + value + "</td>";
+      if (c.endsWith("_time") || c.endsWith("_at")) value = formatRestaurantDate(value);
+      if (c === "payment_state") value = value === "PAID" ? "ชำระแล้ว" : "ยกเลิกแล้ว";
+      if (c === "payment_status") value = value === "PAID" ? "ชำระแล้ว" : "ยังไม่ชำระ";
+      if (c === "zone") value = DINING_ZONES.find(zone => zone.value === value)?.label ?? value;
+      if (c === "method") value = value === "CASH" ? "เงินสด" : value === "TRANSFER" ? "โอนเงิน" : value;
+      if (current === "payments" && ["subtotal", "discount_amount", "total", "received", "change_amount"].includes(c)) {
+        value = Number(value).toLocaleString('th-TH', {minimumFractionDigits:2, maximumFractionDigits:2});
+      }
+      return "<td>" + escapeHtml(value) + "</td>";
     }).join("");
 
+    const paid = current === "orders" && row.payment_status === "PAID";
+    if (current === "payments") {
+      return '<tr>' + cells + '<td><button type="button" class="btn sm" onclick="openReceipt(' +
+        Number(row.payment_id) + ')">ดูใบเสร็จ</button>' +
+        ' <button type="button" class="btn sm del" onclick="deleteReceipt(' + Number(row.payment_id) + ')">ลบ</button>' + '</td></tr>';
+    }
     return "<tr>" + cells +
-      '<td><button class="btn sm" onclick=\'editRow(' +
+      '<td>' + (current === "orders" ? '<button class="btn sm" onclick="openOrderDetails(' + Number(row.order_id) + ')">รายละเอียด / เช็กบิล</button> ' : '') + (paid ? (row.receipt_id ? '<button type="button" class="btn sm del" onclick="deleteReceipt(' + Number(row.receipt_id) + ')">ลบใบเสร็จ</button>' : '') : '<button class="btn sm" onclick=\'editRow(' +
       JSON.stringify(id) + ')\'>แก้ไข</button> ' +
       '<button class="btn sm del" onclick=\'deleteRow(' +
-      JSON.stringify(id) + ')\'>ลบ</button></td></tr>';
+      JSON.stringify(id) + ')\'>' + (current === "items" ? "เลิกขาย" : "ลบ") + '</button>') + '</td></tr>';
   }).join("");
 }
 // ประกอบ URL ของทรัพยากร 1 แถว เช่น /api/customers/5 หรือ /api/combos/3/7 (composite key ต่อด้วย /)
@@ -434,6 +481,7 @@ function entityUrl(cfg, id) {
 }
 // เลือกอาหารหลายรายการ พร้อมจำนวน หมายเหตุ และยอดรวมก่อนบันทึก
 let orderMenus = [];
+let orderTables = [];
 // เก็บราคาตอนสั่งของรายการเดิม เพื่อให้การแก้ไขออเดอร์ไม่ใช้ราคาเมนูใหม่แทนประวัติเดิม
 let orderPrices = new Map();
 let orderLineIndex = 0;
@@ -508,15 +556,26 @@ async function openForm(title, data = {}) {
   await loadOptions(formFields(), false);         // โหลดตัวเลือกของช่อง select ที่ดึงจาก API
   if (entity !== current) return;
   if (entity === "orders") {
-    const result = await api("/api/menu-items");
+    const exclude = editingId === null ? "" : "?exclude_order_id=" + encodeURIComponent(editingId);
+    const [result, tables] = await Promise.all([api("/api/menu-items"), api("/api/dining-tables" + exclude)]);
     if (entity !== current) return;
-    if (!result.ok) { alert(result.error || "โหลดเมนูอาหารไม่สำเร็จ"); return; }
+    if (!result.ok || !tables.ok) { alert(result.error || tables.error || "โหลดเมนู/โต๊ะไม่สำเร็จ"); return; }
     orderMenus = result.data || [];
+    orderTables = tables.data || [];
   }
   $("#modalTitle").textContent = title;
   $("#formFields").innerHTML = formFields().map(f => fieldHtml(f, "f_", data[f.key])).join(""); // เติมค่าลงช่อง (prefix f_)
   $(".modal-box").classList.toggle("order-mode", entity === "orders");
-  if (entity === "orders") buildOrderEditor(data.items || []);
+  bindPhoneInput("f_");
+  if (entity === "orders") {
+    bindOrderTables(data.table_id, data.zone);
+    buildOrderEditor(data.items || []);
+  }
+  if (entity === "reviews") {
+    document.querySelector("#f_cust_id").onchange = () => loadReviewOrders();
+    await loadReviewOrders(data.order_id);
+  }
+  if (entity !== current) return;
   $("#modal").classList.remove("hidden");         // แสดง Modal
 }
 // รวบรวมค่าจากทุกช่องในฟอร์มเป็น object เพื่อส่งไป API
@@ -525,10 +584,16 @@ function collectForm() {
   // ไม่ส่ง unit_price ให้ผู้ใช้กำหนดเอง และตรวจจำนวน/เมนูซ้ำก่อนส่งเพื่อลดข้อผิดพลาด
   const data = {};
   formFields().filter(f => f.key).forEach(f => data[f.key] = $("#f_" + f.key).value);
+  if (current === "customers" && !/^[0-9]{10}$/.test(data.phone)) throw new Error("กรุณากรอกเบอร์โทรเป็นตัวเลข 10 หลัก");
+  if (current === "reviews" && !data.order_id) throw new Error("กรุณาเลือกออเดอร์ที่เสร็จสิ้นของลูกค้า");
   if (current === "orders") {
     const lines = [...document.querySelectorAll(".order-line")];
     if (!data.cust_id || !/^[1-9]\d*$/.test(data.table_id)) {
       throw new Error("กรุณาเลือกลูกค้าและระบุรหัสโต๊ะเป็นจำนวนเต็มมากกว่า 0");
+    }
+    const selectedTable = orderTables.find(table => String(table.table_id) === data.table_id);
+    if (!data.zone || !selectedTable || selectedTable.zone !== data.zone || Number(selectedTable.occupied)) {
+      throw new Error("กรุณาเลือกโซนและโต๊ะว่างให้ถูกต้อง");
     }
     if (!lines.length) throw new Error("กรุณาเลือกเมนูอาหารอย่างน้อย 1 รายการ");
     const seen = new Set();
@@ -555,7 +620,7 @@ async function editRow(id) {
 }
 // ---------- ปุ่มลบ: ยืนยันก่อน แล้วส่ง DELETE ----------
 async function deleteRow(id) {
-  if (!confirm("ยืนยันการลบ?")) return;
+  if (!confirm(current === "items" ? "ยืนยันเลิกขายเมนูนี้? ประวัติและข้อมูลเมนูจะยังคงอยู่" : "ยืนยันการลบ?")) return;
   const r = await api(entityUrl(ENTITIES[current], id), { method: "DELETE" });
   if (!r.ok) { alert((r.todo ? "🚧 " : "⚠️ ") + r.error); return; }
   doSearch();     // ลบเสร็จแล้วโหลดตารางใหม่
@@ -597,3 +662,69 @@ $("#btnSave").onclick = save;                                                  /
 $("#btnCancel").onclick = () => $("#modal").classList.add("hidden");            // ยกเลิก / ปิด Modal
 buildSearch();                                                                  // สร้างช่องค้นหาครั้งแรก
 setStatus($("#status"), 'กด "ค้นหา" เพื่อแสดงข้อมูล');
+
+
+// เมื่อเปลี่ยนลูกค้า จะล้างออเดอร์เก่า และโหลดเฉพาะออเดอร์ COMPLETED ของคนนั้น
+let reviewOptionsRequest = 0;
+async function loadReviewOrders(selectedId = "") {
+  const requestId = ++reviewOptionsRequest;
+  const customer = document.querySelector("#f_cust_id");
+  const select = document.querySelector("#f_order_id");
+  if (!customer || !select) return;
+  const custId = customer.value;
+  select.disabled = true;
+  select.innerHTML = '<option value="">กำลังโหลดออเดอร์…</option>';
+  try {
+    const result = await api('/api/orders?cust_id=' + encodeURIComponent(custId) + '&status=COMPLETED');
+    if (requestId !== reviewOptionsRequest || current !== "reviews" || customer.value !== custId || !select.isConnected) return;
+    if (!result.ok) throw new Error(result.error || "โหลดออเดอร์ไม่สำเร็จ");
+    const orders = (result.data || []).filter(order => String(order.cust_id) === custId && order.status === 'COMPLETED');
+    select.innerHTML = '<option value="">' + (orders.length ? 'เลือกออเดอร์' : 'ลูกค้าคนนี้ยังไม่มีออเดอร์ที่เสร็จสิ้น') + '</option>' +
+      orders.map(order => '<option value="' + Number(order.order_id) + '"' +
+        (String(order.order_id) === String(selectedId) ? ' selected' : '') + '>#' + Number(order.order_id) +
+        ' · ' + escapeHtml(formatRestaurantDate(order.order_time)) + '</option>').join('');
+  } catch (error) {
+    if (requestId === reviewOptionsRequest && select.isConnected) select.innerHTML = '<option value="">' + escapeHtml(error.message) + '</option>';
+  } finally {
+    if (requestId === reviewOptionsRequest && select.isConnected) select.disabled = false;
+  }
+}
+
+
+function bindPhoneInput(prefix) {
+  const input = document.querySelector("#" + prefix + "phone");
+  if (!input) return;
+  // จำกัดเฉพาะเลข 0–9 โดยคงเลข 0 นำหน้าไว้ และรับได้ไม่เกิน 10 หลัก
+  input.oninput = () => {input.value = input.value.replace(/[^0-9]/g, "").slice(0, 10);};
+  input.onpaste = event => {
+    const text = event.clipboardData?.getData("text");
+    if (text === undefined) return;
+    event.preventDefault();
+    const digits = text.replace(/[^0-9]/g, "");
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    input.value = (input.value.slice(0,start) + digits + input.value.slice(end)).slice(0,10);
+    const cursor = Math.min(start + digits.length,10);
+    input.setSelectionRange(cursor,cursor);
+  };
+}
+
+function bindOrderTables(selectedId, selectedZone) {
+  const zone = document.querySelector("#f_zone");
+  const select = document.querySelector("#f_table_id");
+  const existing = orderTables.find(table => String(table.table_id) === String(selectedId));
+  zone.value = existing?.zone || selectedZone || "";
+  const render = id => {
+    const tables = orderTables.filter(table => table.zone === zone.value && Number(table.occupied) === 0);
+    const prompt = !zone.value ? "เลือกโซนก่อน" : tables.length ? "เลือกโต๊ะว่าง" : "ไม่มีโต๊ะว่างในโซนนี้";
+    select.innerHTML = '<option value="">' + prompt + '</option>' + tables.map(table =>
+      '<option value="' + Number(table.table_id) + '"' +
+      (String(table.table_id) === String(id) ? ' selected' : '') +
+      '>โต๊ะ ' + Number(table.table_id) + ' · ' +
+      Number(table.seats) + ' ที่นั่ง (ว่าง)' + '</option>'
+    ).join('');
+    select.disabled = !zone.value || !tables.length;
+  };
+  zone.onchange = () => render("");
+  render(selectedId);
+}

@@ -8,6 +8,7 @@
   <title>ระบบร้านอาหาร — Restaurant Ordering</title>
   <!-- url_for('static', ...) สร้าง path ไปยังไฟล์ในโฟลเดอร์ static ให้อัตโนมัติ -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='service.css') }}">
 </head>
 <body>
   <!-- แถบด้านบน: โลโก้ + เมนูนำทาง -->
@@ -22,6 +23,7 @@
       <button class="tab" data-entity="items">เมนูอาหาร</button>
       <button class="tab" data-entity="combos">ชุดคอมโบ</button>
       <button class="tab" data-entity="orders">ออเดอร์</button>
+      <button class="tab" data-entity="payments">การชำระเงิน / ใบเสร็จ</button>
       <button class="tab" data-entity="reviews">รีวิวร้าน</button>
     </div>
     <!-- การ์ดค้นหา: ช่องกรอกถูกสร้างโดย buildSearch() ใน app.js -->
@@ -51,6 +53,7 @@
       </div>
     </div>
   </div>
+  <script src="{{ url_for('static', filename='operations.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

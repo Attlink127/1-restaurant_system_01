@@ -1,0 +1,37 @@
+.topbar{gap:16px;flex-wrap:wrap}.topbar nav{display:flex;gap:18px;flex-wrap:wrap}.topbar nav a{margin-left:0}
+.tabs{flex-wrap:wrap}td:last-child{min-width:145px}td:last-child .btn{margin:2px}td{vertical-align:top}
+.board-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:24px 0 8px}
+.board-header h1{font-size:26px;color:var(--navy)}.service-muted{color:var(--mute);line-height:1.7;margin:8px 0}
+.board-hint{font-size:13px;color:var(--mute);margin:0 0 18px;line-height:1.7}
+.service-board{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;margin-bottom:32px}
+.table-card,.kitchen-card{background:var(--surface);padding:22px;border:1px solid var(--line);border-radius:var(--card-radius);box-shadow:0 4px 14px #5940320a}
+.table-card.free{border-top:5px solid var(--green)}.table-card.occupied{border-top:5px solid #dc9b28}
+.tile-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.tile-heading h2{font-size:19px}
+.state-pill{display:inline-block;padding:5px 10px;background:var(--tint);color:var(--navy);border-radius:20px;font-size:12px;font-weight:600}
+.free .state-pill,.state-pill.COMPLETED{background:#e3f5eb;color:#1b724b}.occupied .state-pill,.state-pill.PENDING{background:#fff1d8;color:#855500}
+.state-pill.IN_PROGRESS{background:#e4edff;color:#264d96}.state-pill.READY{background:#dcf5ec;color:#16704a}.state-pill.CANCELLED{background:#fce9e6;color:#9a2e22}
+.table-order{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.table-order small{display:block;color:var(--mute);margin:5px 0 10px}
+.table-card>.btn{display:inline-block;margin-top:14px;text-decoration:none}.kitchen-items{list-style:none;padding:10px 0;margin:8px 0 18px}
+.kitchen-items li{padding:10px 0;border-bottom:1px solid var(--line)}.item-note{display:block;color:var(--mute);font-size:12px;margin:4px 0;overflow-wrap:anywhere}
+.empty-board{text-align:center;padding:40px}.service-dialog{width:760px;position:relative;padding-top:54px}.dialog-close{position:absolute;right:20px;top:16px}
+.service-dialog h2{font-size:23px;color:var(--navy)}.service-lines{margin-top:20px}.bill-summary{padding:12px 0;margin-top:12px}.bill-summary p,.checkout-box p{display:flex;justify-content:space-between;gap:16px;margin:10px 0}
+.checkout-box{border-top:1px dashed var(--line);margin-top:10px;padding-top:18px}.checkout-box h3{margin-bottom:12px}.checkout-box .service-muted{display:block;font-size:13px}
+.net-total{font-size:21px;color:var(--navy)}.paid-banner{background:#e3f5eb;color:#1b724b;border:1px solid #b9e6cb;border-radius:8px;padding:14px;margin:16px 0}
+.service-dialog a.btn,.receipt-actions a.btn{text-decoration:none;display:inline-block}.receipt{max-width:740px;margin:32px auto;padding:0 16px}.receipt-actions{display:flex;justify-content:space-between;margin-bottom:18px}.receipt-paper h1,.receipt-paper h2{text-align:center;margin:8px}.receipt-paper h2{font-size:18px}.receipt-paper>p{margin:10px 0;color:var(--mute)}.receipt-paper table{margin-top:20px}.receipt-thanks{text-align:center}
+@media(max-width:600px){.topbar{padding:16px}.brand span{display:block;margin-left:0}.topbar nav{gap:14px;font-size:13px}.service-board{grid-template-columns:minmax(0,1fr)}.service-dialog{padding:52px 16px 20px}.container{padding:0 12px}.service-dialog .search-grid{grid-template-columns:minmax(0,1fr)}.bill-summary p{font-size:14px}.net-total strong{white-space:nowrap}.receipt{padding:0 8px}.receipt-paper{padding:14px}}
+@media print{body{background:#fff;color:#000}.receipt{max-width:none;margin:0;padding:0}.receipt-actions{display:none}.receipt-paper{border:0;box-shadow:none;padding:0}.receipt-paper th{background:#fff;color:#000;border-bottom:2px solid #000}.receipt-paper td{background:#fff!important}.receipt-paper tr{break-inside:avoid}a{color:#000}}
+
+/* การยกเลิกบิลต้องกรอกเหตุผลและยืนยันก่อนส่ง */
+.cancel-confirm{display:flex;align-items:flex-start;gap:8px;margin:14px 0;line-height:1.6}
+.cancel-confirm input{margin-top:4px;flex:0 0 auto}
+
+/* ตารางใบเสร็จ: ให้คอลัมน์จัดการอยู่ในกรอบ บนมือถือเลื่อนเฉพาะตารางได้ */
+/* ใช้ความกว้าง .container ปกติเหมือนแท็บอื่น */
+#resultTable[data-entity="payments"]{table-layout:fixed;font-size:14px}
+#resultTable[data-entity="payments"] th,
+#resultTable[data-entity="payments"] td{padding:9px 5px;white-space:normal;overflow-wrap:anywhere}
+#resultTable[data-entity="payments"] th:last-child,
+#resultTable[data-entity="payments"] td:last-child{width:96px;min-width:0}
+#resultTable[data-entity="payments"] td:last-child .btn{display:block;width:100%;margin:3px 0;padding:6px 4px;white-space:normal}
+.table-wrap{max-width:100%;min-width:0}
+@media(max-width:1000px){#resultTable[data-entity="payments"]{min-width:1050px}}

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ใบเสร็จ #{{ receipt.payment_id }} — ระบบร้านอาหาร</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"><link rel="stylesheet" href="{{ url_for('static', filename='service.css') }}">
+</head><body>
+<main class="receipt"><div class="receipt-actions"><a class="btn" href="/">กลับหน้าหลัก</a></div>
+<article class="card receipt-paper"><h1>ระบบร้านอาหาร</h1><h2>ใบเสร็จรับเงิน #{{ receipt.payment_id }}</h2>
+{% if receipt.status == 'CANCELLED' %}<div class="status err"><strong>บิลนี้ยกเลิกแล้ว</strong><br>เหตุผล: {{ receipt.cancel_reason }}<br>วันที่ยกเลิก {{ receipt.cancelled_at }}</div>{% endif %}
+<p>ออเดอร์ #{{ receipt.order_id }} · โต๊ะ {{ receipt.snapshot.table_id }}</p>
+<p>ลูกค้า {{ receipt.snapshot.customer_name }} · {{ receipt.member_tier }}</p>
+<p>วันที่ชำระ {{ receipt.payment_time.strftime('%d/%m/%Y %H:%M') }}</p>
+<div class="table-wrap"><table><thead><tr><th>รายการ</th><th>จำนวน</th><th>ราคา</th><th>รวม</th></tr></thead><tbody>
+{% for item in receipt.snapshot['items'] %}<tr><td>{{ item.name }}{% if item.note %}<small class="item-note">{{ item.note }}</small>{% endif %}</td><td>{{ item.qty }}</td><td>{{ '%.2f'|format(item.unit_price|float) }}</td><td>{{ '%.2f'|format(item.line_total) }}</td></tr>{% endfor %}
+</tbody></table></div>
+<div class="bill-summary"><p>ก่อนส่วนลด <strong>{{ '%.2f'|format(receipt.subtotal) }} บาท</strong></p>
+<p>ส่วนลด {{ '%.0f'|format(receipt.discount_rate) }}% <strong>{{ '%.2f'|format(receipt.discount_amount) }} บาท</strong></p>
+<p class="net-total">ชำระสุทธิ <strong>{{ '%.2f'|format(receipt.total) }} บาท</strong></p>
+<p>วิธีชำระ <strong>{{ 'เงินสด' if receipt.method == 'CASH' else 'โอนเงิน' }}</strong></p>
+<p>รับเงิน <strong>{{ '%.2f'|format(receipt.received) }} บาท</strong></p><p>เงินทอน <strong>{{ '%.2f'|format(receipt.change_amount) }} บาท</strong></p></div>
+<p class="receipt-thanks">ขอบคุณที่ใช้บริการ</p></article></main></body></html>

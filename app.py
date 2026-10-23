@@ -8,6 +8,7 @@ from datetime import date, datetime
 # Flask = เฟรมเวิร์กเว็บ, request = อ่านค่าที่ส่งมาจากฝั่งเว็บ, jsonify = ตอบกลับเป็น JSON, render_template = เรนเดอร์ไฟล์ HTML
 from flask import Flask, request, jsonify, render_template
 from flask.json.provider import DefaultJSONProvider
+import restaurant_ops as ops
 import db  # โมดูลที่เก็บฟังก์ชันติดต่อฐานข้อมูลทั้งหมด (ชั้น Model)
 
 
@@ -132,7 +133,7 @@ def item_update(_id):
 
 @app.route("/api/menu-items/<int:_id>", methods=["DELETE"])
 def item_delete(_id):
-    """ลบเมนูอาหาร (ถ้าเคยถูกสั่งหรืออยู่ในคอมโบ ระบบจะแจ้งเตือนให้ปิดการขายแทน)"""
+    """เลิกขายเมนูอาหาร โดยคงข้อมูลเมนูและประวัติออเดอร์ไว้เสมอ"""
     return safe(db.delete_item, _id)
 
 
@@ -253,6 +254,52 @@ def report_run(key):
 # ------------------------------------------------------------
 # 10. จุดเริ่มต้นการรันเซิร์ฟเวอร์ (Server Entry Point)
 # ------------------------------------------------------------
+
+
+@app.route("/api/orders/<int:order_id>/details")
+def order_details(order_id):
+    return safe(ops.order_detail, order_id)
+
+
+@app.route("/api/orders/<int:order_id>/checkout", methods=["POST"])
+def checkout(order_id):
+    return safe(ops.checkout, order_id, request.get_json() or {})
+
+
+@app.route("/receipt/<int:payment_id>")
+def receipt_page(payment_id):
+    try:
+        return render_template("receipt.html", receipt=ops.receipt(payment_id))
+    except ValueError:
+        return "ไม่พบใบเสร็จ", 404
+
+
+@app.route("/api/payments/<int:payment_id>/receipt")
+def payment_receipt(payment_id):
+    # อ่าน snapshot ตอนจ่าย ไม่คิดส่วนลดหรือดึงชื่อเมนูปัจจุบันมาแทนใบเสร็จเก่า
+    return safe(ops.receipt, payment_id)
+
+
+@app.route("/api/dining-tables")
+def dining_table_options():
+    return safe(db.list_dining_tables, {k: v for k, v in request.args.items() if v})
+
+
+@app.route("/api/payments/<int:payment_id>/cancel", methods=["POST"])
+def cancel_payment(payment_id):
+    return safe(ops.cancel_payment, payment_id, request.get_json() or {})
+
+
+@app.route("/api/payments")
+def payments_list():
+    return safe(ops.search_payments, {k: v for k, v in request.args.items() if v})
+
+
+@app.route("/api/payments/<int:payment_id>/delete-receipt", methods=["POST"])
+def delete_receipt(payment_id):
+    return safe(ops.delete_receipt, payment_id)
+
+
 if __name__ == "__main__":
     # รันเว็บเซิร์ฟเวอร์ในโหมด Debug พอร์ต 5000 (http://127.0.0.1:5000)
     # debug=True → แก้โค้ดแล้วเซิร์ฟเวอร์รีสตาร์ทเอง และแสดงหน้า Error ละเอียด (ควรปิดตอน deploy จริง)

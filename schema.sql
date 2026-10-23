@@ -12,10 +12,12 @@ USE project69;   # เลือกใช้ฐานข้อมูลชื่�
 # 1. ตารางลูกค้า (customer)
 #    เก็บข้อมูลลูกค้าและระดับสมาชิก
 # ------------------------------------------------------------
+# กติกาสมาชิก: เริ่ม Regular; ยอดสะสม COMPLETED >= 3,000 เป็น Gold, >= 10,000 เป็น VIP
+# db.py เลื่อนระดับในธุรกรรมบันทึกออเดอร์ และไม่ลดระดับที่เคยได้รับแล้ว
 CREATE TABLE customer (
     cust_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    phone VARCHAR(15) NOT NULL,
+    phone VARCHAR(10) NOT NULL,
     member_tier ENUM('Regular', 'Gold', 'VIP')
         NOT NULL DEFAULT 'Regular'
 );
@@ -25,6 +27,7 @@ CREATE TABLE customer (
 # 2. ตารางเมนูอาหาร (menu_item)
 #    เก็บเมนูทั้งหมด รวมทั้งเมนูที่เป็น "ชุดคอมโบ" (category = 'ชุดคอมโบ')
 # ------------------------------------------------------------
+# ห้ามลบเมนูจริง: เลิกขายโดยตั้ง is_discontinued=1 และ is_available=0
 CREATE TABLE menu_item (
     item_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -74,12 +77,13 @@ CREATE TABLE food_order (
     table_id INT NOT NULL,
     order_time DATETIME NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
-    status ENUM(
+        status ENUM(
         'PENDING',
         'IN_PROGRESS',
+        'READY',
         'COMPLETED',
         'CANCELLED'
-    ) NOT NULL DEFAULT 'PENDING',                           # สถานะออเดอร์ เริ่มต้น = รอดำเนินการ
+    ) NOT NULL DEFAULT 'PENDING',                        # สถานะออเดอร์ เริ่มต้น = รอดำเนินการ
 
     # ---- คีย์นอก: ผูกกับตาราง customer และ dining_table ----
     # ทำให้ออเดอร์ต้องอ้างลูกค้า/โต๊ะที่มีอยู่จริง (อ้างค่าไม่มี → ใส่ไม่ได้)
@@ -174,6 +178,42 @@ CREATE TABLE review (
 
 
 
+# payment: ออเดอร์หนึ่งมีประวัติบิลได้หลายใบ แต่มีบิล PAID ได้เพียงใบเดียว
+# active_order_id เป็น generated column ใช้ UNIQUE กันรับเงินซ้ำ โดยเก็บบิลยกเลิกไว้ตรวจย้อนหลัง
+CREATE TABLE payment (
+    payment_id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    status ENUM('PAID','CANCELLED') NOT NULL DEFAULT 'PAID',
+    cancel_reason VARCHAR(255),
+    cancelled_at DATETIME,
+    active_order_id INT GENERATED ALWAYS AS
+        (CASE WHEN status='PAID' THEN order_id ELSE NULL END) STORED,
+    UNIQUE KEY uq_payment_active_order (active_order_id),
+    INDEX idx_payment_order_id (order_id),
+    method ENUM('CASH','TRANSFER') NOT NULL,
+    subtotal DECIMAL(10,2) NOT NULL,
+    member_tier ENUM('Regular','Gold','VIP') NOT NULL,
+    discount_rate DECIMAL(5,2) NOT NULL,
+    discount_amount DECIMAL(10,2) NOT NULL,
+    total DECIMAL(10,2) NOT NULL,
+    received DECIMAL(10,2) NOT NULL,
+    change_amount DECIMAL(10,2) NOT NULL,
+    receipt_snapshot JSON NOT NULL,
+    receipt_deleted_at DATETIME NULL, # ลบเฉพาะการแสดงใบเสร็จ ไม่เปลี่ยนรายการรับเงิน
+    payment_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES food_order(order_id),
+    CHECK (subtotal >= 0 AND discount_rate BETWEEN 0 AND 100),
+    CHECK (discount_amount >= 0 AND discount_amount <= subtotal),
+    CHECK (total = subtotal - discount_amount),
+    CHECK (received >= total AND change_amount = received - total),
+    CONSTRAINT chk_payment_cancellation CHECK (
+        (status='PAID' AND cancel_reason IS NULL AND cancelled_at IS NULL)
+        OR (status='CANCELLED' AND cancelled_at IS NOT NULL AND cancel_reason IS NOT NULL
+            AND CHAR_LENGTH(TRIM(cancel_reason)) BETWEEN 1 AND 255)
+    )
+);
+
+
 # ============================================================
 #  ส่วนที่ 2: ข้อมูลตัวอย่าง (Seed Data)
 #  ★ ลำดับการ INSERT: ตารางแม่ก่อนตารางลูก (เพราะมี FOREIGN KEY)
@@ -215,17 +255,28 @@ VALUES
 
 
 # ---------- ข้อมูลโต๊ะอาหาร 7 โต๊ะ แยกเป็น 3 โซน ----------
-INSERT INTO dining_table
-(table_id, seats, zone)
+INSERT INTO dining_table (table_id, seats, zone)
 VALUES
+-- ในร้าน 5 โต๊ะ
 (1, 2, 'INDOOR'),
 (2, 4, 'INDOOR'),
-(3, 4, 'OUTDOOR'),
 (4, 6, 'INDOOR'),
+(8, 4, 'INDOOR'),
+(9, 6, 'INDOOR'),
+
+-- นอกร้าน 5 โต๊ะ
+(3, 4, 'OUTDOOR'),
 (5, 8, 'OUTDOOR'),
 (6, 5, 'OUTDOOR'),
-(7, 6, 'VIP');
+(10, 4, 'OUTDOOR'),
+(11, 6, 'OUTDOOR'),
 
+-- VIP 5 โต๊ะ
+(7, 6, 'VIP'),
+(12, 4, 'VIP'),
+(13, 6, 'VIP'),
+(14, 8, 'VIP'),
+(15, 6, 'VIP');
 
 
 
@@ -253,28 +304,16 @@ VALUES
 -- ออเดอร์ 1 = 836 บาท
 (1, 4, 2, 359, 'เนื้อสุกปานกลาง'),
 (1, 8, 2, 59, 'หวานน้อย'),
-
--- ออเดอร์ 2 = 248 บาท
 (2, 3, 1, 89, 'เผ็ดน้อย'),
 (2, 2, 1, 159, 'แยกซอส'),
-
--- ออเดอร์ 3 = 677 บาท
 (3, 11, 2, 279, NULL),
 (3, 7, 1, 119, NULL),
-
--- ออเดอร์ 4 = 1605 บาท
 (4, 10, 3, 449, NULL),
 (4, 1, 2, 129, NULL),
-
--- ออเดอร์ 5 = 298 บาท
 (5, 5, 1, 229, NULL),
 (5, 9, 1, 69, 'ไม่ใส่น้ำแข็ง'),
-
--- ออเดอร์ 6 = 148 บาท
 (6, 3, 1, 89, NULL),
 (6, 8, 1, 59, NULL),
-
--- ออเดอร์ 7 (ยกเลิก) = 229 บาท
 (7, 5, 1, 229, 'ลูกค้ายกเลิก - ติดธุระด่วน');
 
 
@@ -290,8 +329,6 @@ VALUES
 (10, 4, 1, 449.00),
 (10, 6, 1, 449.00),
 (10, 8, 1, 449.00),
-
--- ชุดพาสต้า (ราคาชุด 279 บาท)
 (11, 5, 1, 279.00),
 (11, 9, 1, 279.00);
 
