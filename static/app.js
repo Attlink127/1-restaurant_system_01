@@ -36,9 +36,6 @@ const ENTITIES = {
   "payments": {
     label: "การชำระเงิน / ใบเสร็จ", api: "/api/payments", idKey: "payment_id", readOnly: true,
     search: [
-      {key: "payment_state", label: "สถานะบิล", type: "select", options: [
-        {value:"", label:"ทั้งหมด"}, {value:"PAID", label:"ชำระแล้ว"}, {value:"CANCELLED", label:"ยกเลิกแล้ว"}
-      ]},
       {key: "order_id", label: "เลขออเดอร์", type: "number"},
       {key: "customer_name", label: "ชื่อลูกค้าในใบเสร็จ", type: "text"},
       {key: "payment_date", label: "วันที่ชำระ", type: "date"},
