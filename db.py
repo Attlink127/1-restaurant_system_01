@@ -232,43 +232,98 @@ def search_combos(filters):
 
 # ---------- รายงาน: แต่ละฟังก์ชันคืนค่าเป็น list ของ dict (ชื่อคอลัมน์ = หัวตารางบนเว็บ) ----------
 def get_combo(item_id, sub_item_id):
-    """ดึงส่วนประกอบ 1 รายการจากชุดคอมโบ"""
-    sql = ("SELECT item_id, sub_item_id, amount, price FROM combo "
-           "WHERE item_id = %s AND sub_item_id = %s")
-    rows = run_query(sql, (item_id, sub_item_id))
+    """ชื่อเซ็ตใช้ชื่อ menu_item หลัก ส่วน combo เก็บอาหารที่เป็นส่วนประกอบ"""
+    rows = run_query(
+        "SELECT c.item_id,c.sub_item_id,c.amount,c.price,m.name AS combo_name "
+        "FROM combo c JOIN menu_item m ON m.item_id=c.item_id "
+        "WHERE c.item_id=%s AND c.sub_item_id=%s", (item_id, sub_item_id))
     return rows[0] if rows else None
 
 
-def create_combo(data):
-    """เพิ่มเมนูย่อยลงในชุดคอมโบ — data มีคีย์: item_id, sub_item_id, amount, price"""
-    # ทั้ง item_id (ชุดหลัก) และ sub_item_id (อาหารในชุด) อ้างอิง menu_item.item_id
-    # ตาราง combo เป็นตารางเชื่อม: ชุดหนึ่งมีอาหารหลายอย่าง และอาหารอย่างหนึ่งอยู่ได้หลายชุด
-    # schema ใช้ combo_id เป็น PK และ UNIQUE(item_id, sub_item_id) กันคู่ซ้ำ; API อ้างแถวด้วยคู่นี้
-    # ราคาใน combo ไม่ถูกนำมาบวกเป็นยอดออเดอร์ ยอดสั่งชุดใช้ราคา menu_item ของชุดหลัก
-    # ตรวจสอบทางธุรกิจ: เมนูหลักกับเมนูย่อยต้องไม่ใช่เมนูเดียวกัน
-    if str(data.get("item_id")) == str(data.get("sub_item_id")):
-        raise ValueError("เมนูชุดหลักและเมนูในชุดต้องไม่เป็นเมนูเดียวกัน")
+def combo_values(data):
+    name = data.get("combo_name")
+    if not isinstance(name, str) or not 1 <= len(name.strip()) <= 100:
+        raise ValueError("กรุณาตั้งชื่อเซ็ต 1–100 ตัวอักษร")
+    amount = positive_integer(data.get("amount"), "จำนวนอาหารในเซ็ต")
     try:
-        # ถ้าไม่ได้กรอกราคา ให้ใช้ 0.00 แทน เพื่อกันค่า NULL
-        price = data.get("price") or 0.00
-        sql = ("INSERT INTO combo (item_id, sub_item_id, amount, price) "
-               "VALUES (%s, %s, %s, %s)")
-        params = (data["item_id"], data["sub_item_id"], data["amount"], price)
-        return run_command(sql, params)
-    except mysql.connector.Error as err:
-        # errno 1062 = Duplicate entry (คีย์ซ้ำ) → แปลเป็นข้อความไทยให้ผู้ใช้อ่านรู้เรื่อง
-        if err.errno == 1062:
-            raise ValueError("มีเมนูย่อยนี้ในชุดคอมโบอยู่แล้ว")
+        price = Decimal(str(data.get("price")))
+        if not price.is_finite() or price < 0 or price > Decimal("99999999.99") or price != price.quantize(Decimal("0.01")):
+            raise ValueError()
+    except Exception:
+        raise ValueError("กรุณากรอกราคาเซ็ตเป็นตัวเลขตั้งแต่ 0 และไม่เกิน 2 ตำแหน่งทศนิยม") from None
+    return name.strip(), amount, price
+
+
+def create_combo(data):
+    """สร้างเซ็ต 3 เมนู บันทึกเมนูหลักและส่วนประกอบพร้อมกัน ถ้าพลาดให้ rollback"""
+    if not isinstance(data, dict):
+        raise ValueError("ข้อมูลเซ็ตไม่ถูกต้อง")
+    items = data.get("items")
+    if not isinstance(items, list) or len(items) != 3:
+        raise ValueError("กรุณาเลือกอาหารให้ครบ 3 เมนู")
+    lines = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("ข้อมูลเมนูในเซ็ตไม่ถูกต้อง")
+        lines.append((positive_integer(item.get("sub_item_id"), "รหัสเมนู"),
+                      positive_integer(item.get("amount"), "จำนวนอาหารในเซ็ต")))
+    if len({item_id for item_id, amount in lines}) != 3:
+        raise ValueError("กรุณาเลือก 3 เมนูที่ไม่ซ้ำกัน")
+    name, _, price = combo_values(dict(data, amount=lines[0][1]))
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        conn.start_transaction()
+        cur.execute("SELECT item_id FROM menu_item WHERE name=%s AND category=%s FOR UPDATE", (name,"ชุดคอมโบ"))
+        if cur.fetchall():
+            raise ValueError("มีชื่อเซ็ตนี้แล้ว กรุณาตั้งชื่อใหม่ หรือแก้ไขเซ็ตเดิม")
+        # ตรวจเมนูก่อนสร้างชุด ไม่อนุญาตให้เลือกชุดคอมโบอื่นซ้อนเป็นส่วนประกอบ
+        for sub_id, amount in sorted(lines):
+            cur.execute("SELECT category,is_discontinued FROM menu_item WHERE item_id=%s FOR UPDATE", (sub_id,))
+            menu = cur.fetchone()
+            if not menu or menu["is_discontinued"] or menu["category"] == "ชุดคอมโบ":
+                raise ValueError("กรุณาเลือกอาหารทั่วไปที่ยังไม่เลิกขายให้ครบ 3 เมนู")
+        cur.execute("INSERT INTO menu_item (name,category,price,is_available,is_discontinued) VALUES (%s,%s,%s,1,0)", (name,"ชุดคอมโบ",price))
+        item_id = cur.lastrowid
+        for sub_id, amount in lines:
+            cur.execute("INSERT INTO combo (item_id,sub_item_id,amount,price) VALUES (%s,%s,%s,%s)", (item_id,sub_id,amount,price))
+        conn.commit()
+        return dict(new_id=item_id, item_id=item_id, affected=3)
+    except Exception:
+        conn.rollback()
         raise
+    finally:
+        cur.close()
+        conn.close()
 
 
 def update_combo(item_id, sub_item_id, data):
-    """แก้จำนวนเมนูย่อยและราคาในชุดคอมโบ"""
-    price = data.get("price") or 0.00
-    sql = ("UPDATE combo SET amount = %s, price = %s "
-           "WHERE item_id = %s AND sub_item_id = %s")
-    params = (data["amount"], price, item_id, sub_item_id)
-    return run_command(sql, params)
+    """ชื่อและราคาของเซ็ตใช้ร่วมกันทุกส่วนประกอบ แต่ไม่เปลี่ยนราคาออเดอร์เก่า"""
+    name, amount, price = combo_values(data)
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        conn.start_transaction()
+        cur.execute("SELECT item_id FROM menu_item WHERE item_id=%s FOR UPDATE", (item_id,))
+        if not cur.fetchone():
+            raise ValueError("ไม่พบเซ็ต")
+        cur.execute("SELECT combo_id FROM combo WHERE item_id=%s AND sub_item_id=%s FOR UPDATE", (item_id,sub_item_id))
+        if not cur.fetchone():
+            raise ValueError("ไม่พบรายการอาหารในเซ็ต")
+        cur.execute("SELECT item_id FROM menu_item WHERE name=%s AND category=%s AND item_id<>%s", (name,"ชุดคอมโบ",item_id))
+        if cur.fetchone():
+            raise ValueError("ชื่อเซ็ตนี้มีอยู่แล้ว กรุณาตั้งชื่ออื่น")
+        cur.execute("UPDATE menu_item SET name=%s,price=%s WHERE item_id=%s", (name,price,item_id))
+        cur.execute("UPDATE combo SET price=%s WHERE item_id=%s", (price,item_id))
+        cur.execute("UPDATE combo SET amount=%s WHERE item_id=%s AND sub_item_id=%s", (amount,item_id,sub_item_id))
+        conn.commit()
+        return dict(affected=1)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
 
 
 def delete_combo(item_id, sub_item_id):

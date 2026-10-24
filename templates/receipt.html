@@ -1,10 +1,10 @@
 <!doctype html>
 <html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ใบเสร็จ #{{ receipt.payment_id }} — ระบบร้านอาหาร</title>
+<title>ใบเสร็จ #{{ receipt.payment_id }} — ครัวนายอั๋น</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"><link rel="stylesheet" href="{{ url_for('static', filename='service.css') }}">
 </head><body>
 <main class="receipt"><div class="receipt-actions"><a class="btn" href="/">กลับหน้าหลัก</a></div>
-<article class="card receipt-paper"><h1>ระบบร้านอาหาร</h1><h2>ใบเสร็จรับเงิน #{{ receipt.payment_id }}</h2>
+<article class="card receipt-paper"><h1>ครัวนายอั๋น</h1><h2>ใบเสร็จรับเงิน #{{ receipt.payment_id }}</h2>
 {% if receipt.status == 'CANCELLED' %}<div class="status err"><strong>บิลนี้ยกเลิกแล้ว</strong><br>เหตุผล: {{ receipt.cancel_reason }}<br>วันที่ยกเลิก {{ receipt.cancelled_at }}</div>{% endif %}
 <p>ออเดอร์ #{{ receipt.order_id }} · โต๊ะ {{ receipt.snapshot.table_id }}</p>
 <p>ลูกค้า {{ receipt.snapshot.customer_name }} · {{ receipt.member_tier }}</p>

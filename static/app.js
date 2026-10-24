@@ -176,35 +176,44 @@ const ENTITIES = {
     ],
     "form": [
       {
-        "key": "item_id",
-        "label": "เมนูชุดหลัก",
-        "type": "select",
-        "lockOnEdit": true,
-        "optionsFrom": {
-          "api": "/api/menu-items",
-          "value": "item_id",
-          "label": "name"
-        }
+        "key": "combo_name",
+        "label": "ชื่อเซ็ต",
+        "type": "text"
       },
       {
         "key": "sub_item_id",
-        "label": "เมนูที่อยู่ในชุด",
+        "label": "เมนูที่ 1",
+        "placeholder": "เลือกเมนูที่ 1",
         "type": "select",
         "lockOnEdit": true,
         "optionsFrom": {
           "api": "/api/menu-items",
+          "excludeCategory": "ชุดคอมโบ",
           "value": "item_id",
           "label": "name"
         }
       },
       {
         "key": "amount",
-        "label": "จำนวน",
+        "label": "จำนวนเมนูที่ 1",
+        "defaultValue": 1,
         "type": "number"
       },
       {
+        "key": "sub_item_id_2", "label": "เมนูที่ 2", "type": "select",
+        "createOnly": true, "placeholder": "เลือกเมนูที่ 2",
+        "optionsFrom": {"api":"/api/menu-items", "value":"item_id", "label":"name", "excludeCategory":"ชุดคอมโบ"}
+      },
+      {"key":"amount_2", "label":"จำนวนเมนูที่ 2", "type":"number", "createOnly":true, "defaultValue":1},
+      {
+        "key": "sub_item_id_3", "label": "เมนูที่ 3", "type": "select",
+        "createOnly": true, "placeholder": "เลือกเมนูที่ 3",
+        "optionsFrom": {"api":"/api/menu-items", "value":"item_id", "label":"name", "excludeCategory":"ชุดคอมโบ"}
+      },
+      {"key":"amount_3", "label":"จำนวนเมนูที่ 3", "type":"number", "createOnly":true, "defaultValue":1},
+      {
         "key": "price",
-        "label": "ราคาเซ็ต",
+        "label": "ราคาขายรวมทั้งเซ็ต",
         "type": "number"
       }
     ]
@@ -362,13 +371,14 @@ async function loadOptions(fields, forSearch) {
   for (const f of fields.filter(f => f.optionsFrom)) {
     const src = f.optionsFrom, r = await api(src.api);
     // แปลงแถวข้อมูลจาก API เป็น options {value, label} ตามชื่อฟิลด์ที่กำหนด
-    f.options = r.ok ? (r.data || []).map(row => ({ value: row[src.value], label: row[src.label] }))
+    f.options = r.ok ? (r.data || []).filter(row => !src.excludeCategory || row.category !== src.excludeCategory).map(row => ({ value: row[src.value], label: row[src.label] }))
                      : [{ value: "", label: (r.todo ? "🚧 " : "⚠️ ") + r.error }];   // ถ้าโหลดไม่ได้ แสดงข้อความ error
+    if (!forSearch && r.ok && f.placeholder) f.options.unshift({value:"",label:f.placeholder});
     if (forSearch && r.ok) f.options.unshift({ value: "", label: "ทั้งหมด" });       // ช่องค้นหาเพิ่มตัวเลือก "ทั้งหมด"
   }
 }
 // ช่องในฟอร์มที่ใช้อยู่ตอนนี้ (ช่อง editOnly แสดงเฉพาะตอนแก้ไข)
-function formFields() { return ENTITIES[current].form.filter(f => !f.editOnly || editingId !== null); }
+function formFields() { return ENTITIES[current].form.filter(f => (!f.editOnly || editingId !== null) && (!f.createOnly || editingId === null)); }
 
 // ---------- สร้างช่องค้นหาตาม ENTITIES ----------
 async function buildSearch() {
@@ -561,7 +571,7 @@ async function openForm(title, data = {}) {
     orderTables = tables.data || [];
   }
   $("#modalTitle").textContent = title;
-  $("#formFields").innerHTML = formFields().map(f => fieldHtml(f, "f_", data[f.key])).join(""); // เติมค่าลงช่อง (prefix f_)
+  $("#formFields").innerHTML = formFields().map(f => fieldHtml(f, "f_", data[f.key] ?? f.defaultValue)).join(""); // เติมค่าลงช่อง (prefix f_)
   $(".modal-box").classList.toggle("order-mode", entity === "orders");
   bindPhoneInput("f_");
   if (entity === "orders") {
@@ -582,6 +592,14 @@ function collectForm() {
   const data = {};
   formFields().filter(f => f.key).forEach(f => data[f.key] = $("#f_" + f.key).value);
   if (current === "customers" && !/^[0-9]{10}$/.test(data.phone)) throw new Error("กรุณากรอกเบอร์โทรเป็นตัวเลข 10 หลัก");
+  if (current === "combos" && editingId === null) {
+    const ids=[data.sub_item_id,data.sub_item_id_2,data.sub_item_id_3];
+    const amounts=[data.amount,data.amount_2,data.amount_3];
+    if (ids.some(id=>!id)) throw new Error("กรุณาเลือกอาหารให้ครบ 3 เมนู");
+    if (new Set(ids).size!==3) throw new Error("กรุณาเลือก 3 เมนูที่ไม่ซ้ำกัน");
+    if (amounts.some(qty=>!/^[1-9]\d*$/.test(qty))) throw new Error("จำนวนของแต่ละเมนูต้องมากกว่า 0");
+    data.items=ids.map((id,index)=>({sub_item_id:id,amount:amounts[index]}));
+  }
   if (current === "reviews" && !data.order_id) throw new Error("กรุณาเลือกออเดอร์ที่เสร็จสิ้นของลูกค้า");
   if (current === "orders") {
     const lines = [...document.querySelectorAll(".order-line")];
